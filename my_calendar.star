@@ -44,7 +44,7 @@ TTL_SECONDS = 300  # cache the iCal fetch for 5 minutes
 SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 
 # 11x11 calendar2.png (same image as the file in this folder), base64-encoded.
-CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAP0lEQVQYlWP8//8/AwMDA4hgZMANwPKMH1VU/vPdvs3wSVUVp0qYPFgxA5GAiYEEwPgf6mhSTIZ5Di897E0GAPRbH3zM8oobAAAAAElFTkSuQmCC")
+CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAUklEQVQYldWQMQ7AIAwDbYQY+o78/28MnY0SmoUFGGspg62LI4WSMEUB4mcyewC8mTNgUvCdBQ1lLjkV9kgFF6rz1EE5eddcfgijm1X/9W66WRsDuCd2VGR7ZQAAAABJRU5ErkJggg==")
 
 def main():
     tz = LOCATION
