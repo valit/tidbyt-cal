@@ -1,0 +1,6 @@
+# Render output (regenerated on every run)
+my_calendar.webp
+*.webp
+
+# macOS
+.DS_Store

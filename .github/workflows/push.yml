@@ -1,0 +1,24 @@
+name: Push to Tidbyt
+
+on:
+  schedule:
+    # Every 5 minutes. Note: GitHub's scheduler is best-effort and can be
+    # delayed (sometimes several minutes) when the platform is busy.
+    - cron: "*/5 * * * *"
+  # Allow manual runs from the Actions tab for testing.
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Render and push to Tidbyt
+        env:
+          TIDBYT_TOKEN_1: ${{ secrets.TIDBYT_TOKEN_1 }}
+          TIDBYT_TOKEN_2: ${{ secrets.TIDBYT_TOKEN_2 }}
+        run: |
+          chmod +x push.sh
+          ./push.sh
