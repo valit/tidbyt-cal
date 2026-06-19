@@ -13,8 +13,11 @@ set -euo pipefail
 # --- Install pixlet if needed (latest linux_amd64 release) ------------------
 if ! command -v pixlet >/dev/null 2>&1; then
   echo "pixlet not found — installing latest linux_amd64 release..."
-  VERSION="$(curl -sSL https://api.github.com/repos/tidbyt/pixlet/releases/latest \
-    | grep -m1 '"tag_name"' | cut -d '"' -f4)"
+  # Fetch the whole API response first, then parse it. Parsing curl's output
+  # through a pipe to an early-exiting tool (grep -m1 / head) makes curl die
+  # with a write error, which pipefail would turn into a script failure.
+  RELEASE_JSON="$(curl -sSL https://api.github.com/repos/tidbyt/pixlet/releases/latest)"
+  VERSION="$(awk -F'"' '/"tag_name"/{print $4; exit}' <<<"$RELEASE_JSON")"
   VERSION="${VERSION#v}"
   echo "Installing pixlet v${VERSION}"
   curl -sSL "https://github.com/tidbyt/pixlet/releases/download/v${VERSION}/pixlet_${VERSION}_linux_amd64.tar.gz" \
