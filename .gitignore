@@ -4,3 +4,6 @@ my_calendar.webp
 
 # macOS
 .DS_Store
+
+# Local archive — never push
+Archive - do not push/
