@@ -5,7 +5,7 @@ Shows the next relevant event from a private Google Calendar iCal feed,
 with a pixel-precise three-row layout on the 64x32 display.
 
 LAYOUT (64x32, origin top-left)
-  ROW 1  calendar.png icon (11x11) at x=2,y=2  +  date in magenta
+  ROW 1  calendar2.png icon (11x11) at x=2,y=2  +  date in magenta
   ROW 2  event title (white, as written), marquee-scrolled full width
   ROW 3  time in yellow ("At H:MM am/pm" or "All day"), near the bottom
 
@@ -17,7 +17,7 @@ LAYOUT (64x32, origin top-left)
     - Date baseline 2px above icon bottom edge          -> text box top y=5
 
   Note: Pixlet runs in a sandbox with no filesystem access, so the
-  11x11 "calendar.png" in this folder is embedded below as base64 and
+  11x11 "calendar2.png" in this folder is embedded below as base64 and
   decoded at render time for render.Image.
 """
 
@@ -43,7 +43,7 @@ MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", 
 TTL_SECONDS = 300  # cache the iCal fetch for 5 minutes
 SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 
-# 11x11 calendar.png (same image as the file in this folder), base64-encoded.
+# 11x11 calendar2.png (same image as the file in this folder), base64-encoded.
 CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAP0lEQVQYlWP8//8/AwMDA4hgZMANwPKMH1VU/vPdvs3wSVUVp0qYPFgxA5GAiYEEwPgf6mhSTIZ5Di897E0GAPRbH3zM8oobAAAAAElFTkSuQmCC")
 
 def main():
