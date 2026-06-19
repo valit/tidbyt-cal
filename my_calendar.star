@@ -345,4 +345,4 @@ def format_time(t):
     mm = str(minute)
     if minute < 10:
         mm = "0" + mm
-    return "at " + str(h12) + ":" + mm + " " + suffix
+    return str(h12) + ":" + mm + " " + suffix
