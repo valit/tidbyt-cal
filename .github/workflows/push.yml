@@ -7,6 +7,10 @@ on:
     - cron: "*/5 * * * *"
   # Allow manual runs from the Actions tab for testing.
   workflow_dispatch:
+  # External trigger (e.g. cron-job.org) for a reliable 5-minute cadence.
+  # Fire by POSTing {"event_type":"tidbyt-push"} to the repo dispatches API.
+  repository_dispatch:
+    types: [tidbyt-push]
 
 jobs:
   push:
