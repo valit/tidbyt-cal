@@ -5,19 +5,22 @@ Shows the next relevant event from a private Google Calendar iCal feed,
 with a pixel-precise three-row layout on the 64x32 display.
 
 LAYOUT (64x32, origin top-left)
-  ROW 1  calendar2.png icon (11x11) at x=2,y=2  +  date in magenta
+  ROW 1  calendar3.png icon (8x8) at x=2,y=2  +  date in magenta
   ROW 2  event title (white, as written), marquee-scrolled full width
   ROW 3  time in yellow ("At H:MM am/pm" or "All day"), near the bottom
 
-  All text uses the standard Tidbyt font "tb-8".
-  Vertical offsets are derived from the spec's baseline rules:
-    - Row 3 baseline 2px above the bottom edge        -> text box top y=24
-    - Row 2 baseline 2px above top of Row 3 caps      -> text box top y=16
-    - Icon bottom 3px above top of Row 2 caps         -> icon top y=2
-    - Date baseline 2px above icon bottom edge          -> text box top y=5
+  All text uses the standard Tidbyt font "tb-8" (baseline = box top + 7,
+  lowest glyph pixel = box top + 6).
+
+  Static content keeps a 3px margin on every edge; the Row 2 title marquee is
+  exempt and runs full width edge to edge.
+    - Icon: 8x8 at x=3, y=3                            -> icon bottom edge y=11
+    - Date: x=14 (3px gap), baseline 1px above icon bottom edge (y=10) -> box top y=3
+    - Row 2 title: full-width marquee                  -> y=14
+    - Row 3 bottom: lowest pixel at row 28 (3px gap)   -> text box top y=22
 
   Note: Pixlet runs in a sandbox with no filesystem access, so the
-  11x11 "calendar2.png" in this folder is embedded below as base64 and
+  8x8 "calendar3.png" in this folder is embedded below as base64 and
   decoded at render time for render.Image.
 """
 
@@ -43,8 +46,8 @@ MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", 
 TTL_SECONDS = 300  # cache the iCal fetch for 5 minutes
 SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 
-# 11x11 calendar2.png (same image as the file in this folder), base64-encoded.
-CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAUklEQVQYldWQMQ7AIAwDbYQY+o78/28MnY0SmoUFGGspg62LI4WSMEUB4mcyewC8mTNgUvCdBQ1lLjkV9kgFF6rz1EE5eddcfgijm1X/9W66WRsDuCd2VGR7ZQAAAABJRU5ErkJggg==")
+# 8x8 calendar3.png (same image as the file in this folder), base64-encoded.
+CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAQElEQVQYlWP8//8/AwQw/mdg+M+IzmaC8EECUBqZDVMKNQIrYAERDx88wCopr6AAtQIPoFwBI9ibMJejg///GQEXFxYMoIno4wAAAABJRU5ErkJggg==")
 
 def main():
     tz = LOCATION
@@ -80,18 +83,18 @@ def render_event(event):
 
                 # ROW 1 — calendar icon at (2, 2)
                 render.Padding(
-                    pad = (2, 2, 0, 0),
-                    child = render.Image(src = CALENDAR_PNG, width = 11, height = 11),
+                    pad = (3, 3, 0, 0),
+                    child = render.Image(src = CALENDAR_PNG, width = 8, height = 8),
                 ),
                 # ROW 1 — date text, 2px right of the icon
                 render.Padding(
-                    pad = (15, 5, 0, 0),
+                    pad = (14, 3, 0, 0),
                     child = render.Text(content = date_str, color = PINK, font = FONT),
                 ),
 
                 # ROW 2 — title, full-width marquee (no horizontal padding)
                 render.Padding(
-                    pad = (0, 16, 0, 0),
+                    pad = (0, 14, 0, 0),
                     child = render.Marquee(
                         width = 64,
                         child = render.Text(content = title, color = WHITE, font = FONT),
@@ -100,7 +103,7 @@ def render_event(event):
 
                 # ROW 3 — time, 2px from the left
                 render.Padding(
-                    pad = (2, 24, 0, 0),
+                    pad = (3, 22, 0, 0),
                     child = render.Text(content = time_str, color = YELLOW, font = FONT),
                 ),
             ],
@@ -119,23 +122,23 @@ def render_no_events():
 
                 # ROW 1 — calendar icon at (2, 2) + today's date
                 render.Padding(
-                    pad = (2, 2, 0, 0),
-                    child = render.Image(src = CALENDAR_PNG, width = 11, height = 11),
+                    pad = (3, 3, 0, 0),
+                    child = render.Image(src = CALENDAR_PNG, width = 8, height = 8),
                 ),
                 render.Padding(
-                    pad = (15, 5, 0, 0),
+                    pad = (14, 3, 0, 0),
                     child = render.Text(content = date_str, color = PINK, font = FONT),
                 ),
 
                 # ROW 2 — static line, 2px from the left
                 render.Padding(
-                    pad = (2, 16, 0, 0),
+                    pad = (3, 14, 0, 0),
                     child = render.Text(content = "ALL DONE", color = YELLOW, font = FONT),
                 ),
 
                 # ROW 3 — static line, 2px from the left
                 render.Padding(
-                    pad = (2, 24, 0, 0),
+                    pad = (3, 22, 0, 0),
                     child = render.Text(content = "FOR TODAY :)", color = YELLOW, font = FONT),
                 ),
             ],
@@ -327,6 +330,7 @@ def same_day(a, b):
     return a.year == b.year and a.month == b.month and a.day == b.day
 
 def format_date(t):
+    # e.g. "JUN 19" — month abbreviation, then day number.
     return MONTHS[t.month - 1] + " " + str(t.day)
 
 def format_time(t):
