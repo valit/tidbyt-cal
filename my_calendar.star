@@ -94,7 +94,7 @@ def main(config):
     if not ical_url:
         return render_message("Set ICAL_URL")
 
-    events = fetch_events(tz, ical_url)
+    events = fetch_events(tz, ical_url, now)
     event = select_event(events, now, tz)
 
     if event == None:
@@ -323,14 +323,19 @@ def is_contiguous(current, nxt):
 # iCal parsing
 # ---------------------------------------------------------------------------
 
-def fetch_events(tz, ical_url):
+def fetch_events(tz, ical_url, now):
     resp = http.get(ical_url, ttl_seconds = TTL_SECONDS)
     if resp.status_code != 200:
         return []
-    return parse_ical(resp.body(), tz)
+    return parse_ical(resp.body(), tz, now)
 
-def parse_ical(body, tz):
+def parse_ical(body, tz, now):
     lines = unfold(body)
+
+    # We only ever care about events occurring today or tomorrow, so recurring
+    # events are expanded into just those two candidate days.
+    today_ord = days_from_civil(now.year, now.month, now.day)
+    window = [today_ord, today_ord + 1]
 
     events = []
     in_event = False
@@ -338,6 +343,9 @@ def parse_ical(body, tz):
     start = None
     end = None
     all_day = False
+    rrule = ""
+    exdates = []
+    status = ""
 
     for line in lines:
         if line == "BEGIN:VEVENT":
@@ -346,16 +354,26 @@ def parse_ical(body, tz):
             start = None
             end = None
             all_day = False
+            rrule = ""
+            exdates = []
+            status = ""
         elif line == "END:VEVENT":
-            if start != None:
+            if start != None and status != "CANCELLED":
                 if end == None:
                     end = add_seconds(start, 60 * 60)  # default 1h
-                events.append({
-                    "summary": summary if summary != "" else "(no title)",
-                    "start": start,
-                    "end": end,
-                    "all_day": all_day,
-                })
+                title = summary if summary != "" else "(no title)"
+                if rrule != "":
+                    # Recurring: emit only the occurrences that land in our window.
+                    for occ in expand_rrule(start, end, all_day, rrule, exdates, tz, window):
+                        occ["summary"] = title
+                        events.append(occ)
+                else:
+                    events.append({
+                        "summary": title,
+                        "start": start,
+                        "end": end,
+                        "all_day": all_day,
+                    })
             in_event = False
         elif in_event:
             name, params, value = split_property(line)
@@ -366,8 +384,149 @@ def parse_ical(body, tz):
                 all_day = is_date_only(value, params)
             elif name == "DTEND":
                 end = parse_dt(value, params, tz)
+            elif name == "RRULE":
+                rrule = value
+            elif name == "EXDATE":
+                for v in value.split(","):
+                    v = v.strip()
+                    if v != "":
+                        exdates.append(parse_dt(v, params, tz))
+            elif name == "STATUS":
+                status = value.strip().upper()
 
     return events
+
+# ---------------------------------------------------------------------------
+# Recurrence (RRULE) expansion — only enough to detect whether a recurring
+# event has an occurrence on the candidate days (today / tomorrow).
+# ---------------------------------------------------------------------------
+
+BYDAY_INDEX = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+def days_from_civil(y, m, d):
+    # Days since 1970-01-01 (Howard Hinnant's algorithm). Pure integer math, so
+    # day counts and weekdays are exact regardless of DST.
+    yy = y - 1 if m <= 2 else y
+    era = (yy if yy >= 0 else yy - 399) // 400
+    yoe = yy - era * 400
+    doy = (153 * (m - 3 if m > 2 else m + 9) + 2) // 5 + d - 1
+    doe = yoe * 365 + yoe // 4 - yoe // 100 + doy
+    return era * 146097 + doe - 719468
+
+def civil_from_days(z):
+    z = z + 719468
+    era = (z if z >= 0 else z - 146096) // 146097
+    doe = z - era * 146097
+    yoe = (doe - doe // 1460 + doe // 36524 - doe // 146096) // 365
+    y = yoe + era * 400
+    doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
+    mp = (5 * doy + 2) // 153
+    d = doy - (153 * mp + 2) // 5 + 1
+    m = mp + 3 if mp < 10 else mp - 9
+    return (y + 1 if m <= 2 else y, m, d)
+
+def weekday_mon0(ordinal):
+    return (ordinal + 3) % 7  # 0 = Monday
+
+def to_int(s, default):
+    if s == None:
+        return default
+    s = s.strip()
+    if s == "":
+        return default
+    return int(s)
+
+def parse_rrule(s):
+    out = {}
+    for part in s.split(";"):
+        kv = part.split("=", 1)
+        if len(kv) == 2:
+            out[kv[0].strip().upper()] = kv[1].strip()
+    return out
+
+def byday_set(rr):
+    out = []
+    if "BYDAY" not in rr:
+        return out
+    for code in rr["BYDAY"].split(","):
+        code = code.strip().upper()
+        if len(code) >= 2:
+            day = code[-2:]  # drop any ordinal prefix like "2" in "2WE"
+            if day in BYDAY_INDEX:
+                out.append(BYDAY_INDEX[day])
+    return out
+
+def rrule_matches(freq, interval, bydays, bymonthday, s_ord, sy, sm, d_ord, y, m, d):
+    if freq == "DAILY":
+        return (d_ord - s_ord) % interval == 0
+    if freq == "WEEKLY":
+        if len(bydays) > 0:
+            if weekday_mon0(d_ord) not in bydays:
+                return False
+            mon_d = d_ord - weekday_mon0(d_ord)
+            mon_s = s_ord - weekday_mon0(s_ord)
+            return ((mon_d - mon_s) // 7) % interval == 0
+        return (d_ord - s_ord) % (7 * interval) == 0
+    if freq == "MONTHLY":
+        if d != bymonthday:
+            return False
+        return ((y - sy) * 12 + (m - sm)) % interval == 0
+    if freq == "YEARLY":
+        return m == sm and d == bymonthday and (y - sy) % interval == 0
+    return False
+
+def rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
+    if count < 0:
+        return True
+    if freq == "DAILY":
+        return (d_ord - s_ord) // interval <= count - 1
+    if freq == "WEEKLY" and len(bydays) == 0:
+        return (d_ord - s_ord) // (7 * interval) <= count - 1
+    return True  # weekly+byday / monthly / yearly counts not enforced
+
+def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
+    rr = parse_rrule(rrule_str)
+    freq = rr.get("FREQ", "")
+    interval = to_int(rr.get("INTERVAL", "1"), 1)
+    if interval < 1:
+        interval = 1
+    bydays = byday_set(rr)
+    until = parse_dt(rr["UNTIL"], "", tz) if "UNTIL" in rr else None
+    count = to_int(rr["COUNT"], -1) if "COUNT" in rr else -1
+    dur = end - start
+
+    sy = start.year
+    sm = start.month
+    sd = start.day
+    shour = start.hour
+    smin = start.minute
+    ssec = start.second
+    s_ord = days_from_civil(sy, sm, sd)
+    bymonthday = to_int(rr.get("BYMONTHDAY", str(sd)), sd)
+
+    ex = {}
+    for e in exdates:
+        ex[(e.year, e.month, e.day)] = True
+
+    occs = []
+    for d_ord in window:
+        if d_ord < s_ord:
+            continue
+        ymd = civil_from_days(d_ord)
+        y = ymd[0]
+        m = ymd[1]
+        d = ymd[2]
+        if not rrule_matches(freq, interval, bydays, bymonthday, s_ord, sy, sm, d_ord, y, m, d):
+            continue
+        occ_start = time.time(year = y, month = m, day = d, hour = shour, minute = smin, second = ssec, location = tz)
+        if until != None and occ_start > until:
+            continue
+        if not rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
+            continue
+        if (y, m, d) in ex:
+            continue
+        occs.append({"start": occ_start, "end": occ_start + dur, "all_day": all_day})
+    return occs
 
 def unfold(body):
     # iCal folds long lines: a continuation begins with a space or tab.
