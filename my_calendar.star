@@ -28,6 +28,7 @@ load("render.star", "render")
 load("http.star", "http")
 load("time.star", "time")
 load("encoding/base64.star", "base64")
+load("encoding/json.star", "json")
 load("schema.star", "schema")
 
 # The private iCal feed URL is NOT stored in this file. It is supplied at
@@ -88,6 +89,14 @@ FW4 = base64.decode("iVBORw0KGgoAAAANSUhEUgAAABcAAAAXCAYAAADgKtSgAAAAV0lEQVR42mN
 
 def main(config):
     tz = LOCATION
+    location_str = config.get("location")
+    if location_str and location_str.startswith("{"):
+        loc = json.decode(location_str)
+        if loc != None:
+            tz_from_loc = loc.get("timezone")
+            if tz_from_loc and tz_from_loc != "":
+                tz = tz_from_loc
+
     now = time.now().in_location(tz)
 
     ical_url = config.get("ical_url")
@@ -98,7 +107,7 @@ def main(config):
     event = select_event(events, now, tz)
 
     if event == None:
-        return render_no_events()
+        return render_no_events(tz)
 
     return render_event(event)
 
@@ -115,6 +124,12 @@ def get_schema():
                 name = "iCal URL",
                 desc = "Private Google Calendar iCal feed URL (.ics)",
                 icon = "calendar",
+            ),
+            schema.Location(
+                id = "location",
+                name = "Location",
+                desc = "Used to show dates and times in your local timezone.",
+                icon = "locationDot",
             ),
         ],
     )
@@ -196,10 +211,10 @@ def render_message(msg):
         ),
     )
 
-def render_no_events():
+def render_no_events(tz):
     # Same 3-row layout as the main display: icon + today's date on top, then
     # two static yellow lines (no marquee).
-    now = time.now().in_location(LOCATION)
+    now = time.now().in_location(tz)
     date_str = format_date(now)
 
     # New Year's Eve easter egg: same middle line, year-stamped bottom line
