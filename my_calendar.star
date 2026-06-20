@@ -28,6 +28,7 @@ load("render.star", "render")
 load("http.star", "http")
 load("time.star", "time")
 load("encoding/base64.star", "base64")
+load("schema.star", "schema")
 
 # The private iCal feed URL is NOT stored in this file. It is supplied at
 # runtime via Pixlet config: config.get("ical_url"). In CI, push.sh passes it
@@ -67,6 +68,23 @@ def main(config):
         return render_no_events()
 
     return render_event(event)
+
+def get_schema():
+    # Exposes the iCal URL as a config field. In `pixlet serve`, this renders an
+    # input box in the browser preview. The field id "ical_url" matches the key
+    # the app reads (config.get("ical_url")) and the value push.sh passes in CI
+    # (ical_url="$ICAL_URL"), so serve and the workflow stay in sync.
+    return schema.Schema(
+        version = "1",
+        fields = [
+            schema.Text(
+                id = "ical_url",
+                name = "iCal URL",
+                desc = "Private Google Calendar iCal feed URL (.ics)",
+                icon = "calendar",
+            ),
+        ],
+    )
 
 # ---------------------------------------------------------------------------
 # Rendering
