@@ -5,10 +5,13 @@
 # if it isn't already on PATH), but also works locally on Linux.
 #
 # Required environment variables:
+#   ICAL_URL       — private Google Calendar iCal feed URL
 #   TIDBYT_TOKEN_1 — API token for device 1
 #   TIDBYT_TOKEN_2 — API token for device 2
 
 set -euo pipefail
+
+: "${ICAL_URL:?ICAL_URL is not set}"
 
 # --- Install pixlet if needed (latest linux_amd64 release) ------------------
 if ! command -v pixlet >/dev/null 2>&1; then
@@ -32,7 +35,7 @@ pixlet version
 
 # --- Render ----------------------------------------------------------------
 echo "Rendering my_calendar.star..."
-pixlet render my_calendar.star -o my_calendar.webp
+pixlet render my_calendar.star ical_url="$ICAL_URL" -o my_calendar.webp
 
 # --- Push to both devices --------------------------------------------------
 echo "Pushing to device 1..."

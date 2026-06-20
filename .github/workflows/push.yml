@@ -21,6 +21,7 @@ jobs:
 
       - name: Render and push to Tidbyt
         env:
+          ICAL_URL: ${{ secrets.ICAL_URL }}
           TIDBYT_TOKEN_1: ${{ secrets.TIDBYT_TOKEN_1 }}
           TIDBYT_TOKEN_2: ${{ secrets.TIDBYT_TOKEN_2 }}
         run: |

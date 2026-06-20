@@ -29,7 +29,10 @@ load("http.star", "http")
 load("time.star", "time")
 load("encoding/base64.star", "base64")
 
-ICAL_URL = "***REMOVED-ICAL-URL***"
+# The private iCal feed URL is NOT stored in this file. It is supplied at
+# runtime via Pixlet config: config.get("ical_url"). In CI, push.sh passes it
+# from the ICAL_URL GitHub Secret. For local preview, pass it on the command
+# line, e.g.:  pixlet render my_calendar.star ical_url="https://..."
 
 LOCATION = "America/Los_Angeles"
 
@@ -49,11 +52,15 @@ SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 # 8x8 calendar3.png (same image as the file in this folder), base64-encoded.
 CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAQElEQVQYlWP8//8/AwQw/mdg+M+IzmaC8EECUBqZDVMKNQIrYAERDx88wCopr6AAtQIPoFwBI9ibMJejg///GQEXFxYMoIno4wAAAABJRU5ErkJggg==")
 
-def main():
+def main(config):
     tz = LOCATION
     now = time.now().in_location(tz)
 
-    events = fetch_events(tz)
+    ical_url = config.get("ical_url")
+    if not ical_url:
+        return render_message("Set ICAL_URL")
+
+    events = fetch_events(tz, ical_url)
     event = select_event(events, now, tz)
 
     if event == None:
@@ -107,6 +114,17 @@ def render_event(event):
                     child = render.Text(content = time_str, color = YELLOW, font = FONT),
                 ),
             ],
+        ),
+    )
+
+def render_message(msg):
+    # Simple centered message (e.g. when the iCal URL config is missing).
+    return render.Root(
+        child = render.Box(
+            width = 64,
+            height = 32,
+            color = BLACK,
+            child = render.WrappedText(content = msg, color = WHITE, font = FONT, align = "center", width = 60),
         ),
     )
 
@@ -212,8 +230,8 @@ def is_contiguous(current, nxt):
 # iCal parsing
 # ---------------------------------------------------------------------------
 
-def fetch_events(tz):
-    resp = http.get(ICAL_URL, ttl_seconds = TTL_SECONDS)
+def fetch_events(tz, ical_url):
+    resp = http.get(ical_url, ttl_seconds = TTL_SECONDS)
     if resp.status_code != 200:
         return []
     return parse_ical(resp.body(), tz)
