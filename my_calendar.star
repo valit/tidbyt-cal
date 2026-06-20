@@ -136,6 +136,11 @@ def title_row(title):
         pad = (0, 14, 0, 0),
         child = render.Marquee(
             width = 64,
+            # Hold the title still at the 3px left margin (offset_start = 3) for
+            # ~500ms (10 frames * 50ms default frame delay) before scrolling
+            # edge-to-edge. Re-holds at the start of each loop.
+            offset_start = 3,
+            delay = 10,
             child = render.Text(content = title, color = WHITE, font = FONT),
         ),
     )
