@@ -50,8 +50,26 @@ MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", 
 TTL_SECONDS = 300  # cache the iCal fetch for 5 minutes
 SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 
+# When True, the app pretends every day is December 31st so the New Year's Eve
+# easter egg can be previewed on any date. Must stay False in production.
+TEST_FORCE_DEC31 = False
+
+def is_new_years_eve(now):
+    # New Year's Eve easter egg trigger (Dec 31). TEST_FORCE_DEC31 forces it on
+    # for previewing regardless of the real date.
+    if TEST_FORCE_DEC31:
+        return True
+    return now.month == 12 and now.day == 31
+
 # 8x8 calendar3.png (same image as the file in this folder), base64-encoded.
 CALENDAR_PNG = base64.decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAQElEQVQYlWP8//8/AwQw/mdg+M+IzmaC8EECUBqZDVMKNQIrYAERDx88wCopr6AAtQIPoFwBI9ibMJejg///GQEXFxYMoIno4wAAAABJRU5ErkJggg==")
+
+# 23x23 fireworks easter-egg sprite frames (fw_fw1..fw_fw4.png in this folder),
+# base64-encoded. Cycled by render.Animation on the New Year's Eve screen.
+FW1 = base64.decode("iVBORw0KGgoAAAANSUhEUgAAABcAAAAXCAYAAADgKtSgAAAAJElEQVR42mNgGAWjYBQME/D/ddN/mhkMBrS0YDT+RsEoGC4AANDQEalSyfH5AAAAAElFTkSuQmCC")
+FW2 = base64.decode("iVBORw0KGgoAAAANSUhEUgAAABcAAAAXCAYAAADgKtSgAAAAOklEQVR42mNgGAWjYBQw/P+06j8hNlUsQKep64vXTf+pHixgDDQYDEA0VGxwu5ymYU7z1DIKRsEQBwCfH0tJQ7rxqQAAAABJRU5ErkJggg==")
+FW3 = base64.decode("iVBORw0KGgoAAAANSUhEUgAAABcAAAAXCAYAAADgKtSgAAAAfUlEQVR42mNgGBHgV+aW/0PT8P+fVlFu+P9puv9JMTzqxLP/FFuAzXCSDUY3jBBNlXDGxabY5eiYehGMZgjJhoIiEIyxuBLu0tdNOH0CwhWXKsCYvi4fkDCnS2qhajrHFjHYDCO5MMMV47hcSpXSkiqpBBcgu5AacMMHFQAALWftMOh4WMAAAAAASUVORK5CYII=")
+FW4 = base64.decode("iVBORw0KGgoAAAANSUhEUgAAABcAAAAXCAYAAADgKtSgAAAAV0lEQVR42mNgGCyg1iTqxNA0nGJQ7y1Glut0U4pP0MQCog0eBcMAgFIHuUkQHdhk2pwA4dFQHSkAV2zXV4aeoKgoJjYZoRdWZJX1dKsgQK6lVmYb3OU2ANIcIx0TOc/2AAAAAElFTkSuQmCC")
 
 def main(config):
     tz = LOCATION
@@ -149,37 +167,62 @@ def render_message(msg):
 def render_no_events():
     # Same 3-row layout as the main display: icon + today's date on top, then
     # two static yellow lines (no marquee).
-    date_str = format_date(time.now().in_location(LOCATION))
+    now = time.now().in_location(LOCATION)
+    date_str = format_date(now)
 
-    return render.Root(
-        child = render.Stack(
-            children = [
-                render.Box(width = 64, height = 32, color = BLACK),
+    # New Year's Eve easter egg: same middle line, year-stamped bottom line
+    # (year pulled dynamically from today's date, e.g. "FOR 2026").
+    nye = is_new_years_eve(now)
+    middle_line = "ALL DONE"
+    bottom_line = "FOR " + str(now.year) + "!!" if nye else "FOR TODAY :)"
 
-                # ROW 1 — calendar icon at (2, 2) + today's date
-                render.Padding(
-                    pad = (3, 3, 0, 0),
-                    child = render.Image(src = CALENDAR_PNG, width = 8, height = 8),
-                ),
-                render.Padding(
-                    pad = (14, 3, 0, 0),
-                    child = render.Text(content = date_str, color = PINK, font = FONT),
-                ),
+    kids = [
+        render.Box(width = 64, height = 32, color = BLACK),
 
-                # ROW 2 — static line, 2px from the left
-                render.Padding(
-                    pad = (3, 14, 0, 0),
-                    child = render.Text(content = "ALL DONE", color = YELLOW, font = FONT),
-                ),
-
-                # ROW 3 — static line, 2px from the left
-                render.Padding(
-                    pad = (3, 22, 0, 0),
-                    child = render.Text(content = "FOR TODAY :)", color = YELLOW, font = FONT),
-                ),
-            ],
+        # ROW 1 — calendar icon at (2, 2) + today's date
+        render.Padding(
+            pad = (3, 3, 0, 0),
+            child = render.Image(src = CALENDAR_PNG, width = 8, height = 8),
         ),
-    )
+        render.Padding(
+            pad = (14, 3, 0, 0),
+            child = render.Text(content = date_str, color = PINK, font = FONT),
+        ),
+
+        # ROW 2 — static line, 2px from the left
+        render.Padding(
+            pad = (3, 14, 0, 0),
+            child = render.Text(content = middle_line, color = YELLOW, font = FONT),
+        ),
+
+        # ROW 3 — static line, 2px from the left
+        render.Padding(
+            pad = (3, 22, 0, 0),
+            child = render.Text(content = bottom_line, color = YELLOW, font = FONT),
+        ),
+    ]
+
+    # Easter egg flourish: an animated fireworks burst on the right side,
+    # nudged slightly above center (23x23 sprite at x=42, y=2 -> center ~(53,13)).
+    # The text keeps its 3px margins; the firework is decorative and may run to
+    # the right edge. Frames cycle spark -> small burst -> big burst -> fading,
+    # with a short blank gap, then loop.
+    if nye:
+        kids.append(render.Padding(
+            pad = (42, 2, 0, 0),
+            child = render.Animation(children = [
+                render.Image(src = FW1, width = 23, height = 23),
+                render.Image(src = FW2, width = 23, height = 23),
+                render.Image(src = FW3, width = 23, height = 23),
+                render.Image(src = FW3, width = 23, height = 23),
+                render.Image(src = FW4, width = 23, height = 23),
+                render.Image(src = FW4, width = 23, height = 23),
+                render.Box(width = 23, height = 23),
+                render.Box(width = 23, height = 23),
+            ]),
+        ))
+
+    return render.Root(child = render.Stack(children = kids), delay = 150)
 
 # ---------------------------------------------------------------------------
 # Event selection
@@ -230,6 +273,11 @@ def select_event(events, now, tz):
     # 4. No timed events remain today.
     if now.hour < 20:
         # 4a. Before 8 PM → placeholder.
+        return None
+
+    # Easter egg: on Dec 31, stay on the no-events screen through midnight
+    # instead of jumping ahead to tomorrow's (next year's) first event.
+    if is_new_years_eve(now):
         return None
 
     # 4b. At or after 8 PM → first timed event of tomorrow (never all-day).
