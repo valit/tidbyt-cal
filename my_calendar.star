@@ -50,6 +50,21 @@ MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", 
 TTL_SECONDS = 300  # cache the iCal fetch for 5 minutes
 SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 
+# tb-8 per-character advance widths in pixels (measured empirically). Used to
+# decide whether a title fits without scrolling. A rendered string's pixel
+# width = sum(advances) - 1.
+CHAR_ADV = {"!": 2, "'": 2, ".": 2, ":": 2, " ": 3, "(": 3, ")": 3, ",": 3, "+": 4, "-": 4, "?": 4, "I": 4, "J": 4, "T": 4, "c": 4, "i": 4, "j": 4, "l": 4, "s": 4, "v": 4, "&": 5, "/": 5, "0": 5, "1": 5, "2": 5, "3": 5, "4": 5, "5": 5, "6": 5, "7": 5, "8": 5, "9": 5, "A": 5, "B": 5, "C": 5, "D": 5, "E": 5, "F": 5, "G": 5, "H": 5, "K": 5, "L": 5, "N": 5, "O": 5, "P": 5, "Q": 5, "R": 5, "S": 5, "U": 5, "X": 5, "Z": 5, "a": 5, "b": 5, "d": 5, "e": 5, "f": 5, "g": 5, "h": 5, "k": 5, "n": 5, "o": 5, "p": 5, "q": 5, "r": 5, "t": 5, "u": 5, "x": 5, "y": 5, "z": 5, "M": 6, "V": 6, "W": 6, "Y": 6, "m": 6, "w": 6}
+DEFAULT_ADV = 6  # unknown chars: assume widest, so we never under-estimate & clip
+TITLE_STATIC_MAX = 61  # px; title <= this fits at x=3 without clipping -> static
+
+def text_width(s):
+    if len(s) == 0:
+        return 0
+    w = 0
+    for i in range(len(s)):
+        w += CHAR_ADV.get(s[i], DEFAULT_ADV)
+    return w - 1
+
 # When True, the app pretends every day is December 31st so the New Year's Eve
 # easter egg can be previewed on any date. Must stay False in production.
 TEST_FORCE_DEC31 = False
@@ -108,6 +123,23 @@ def get_schema():
 # Rendering
 # ---------------------------------------------------------------------------
 
+def title_row(title):
+    # The Row 2 title. If it fits within the static width, render plain text at
+    # the 3px left margin (like the other static rows). Only when it's too wide
+    # do we fall back to a full-width, edge-to-edge scrolling marquee.
+    if text_width(title) <= TITLE_STATIC_MAX:
+        return render.Padding(
+            pad = (3, 14, 0, 0),
+            child = render.Text(content = title, color = WHITE, font = FONT),
+        )
+    return render.Padding(
+        pad = (0, 14, 0, 0),
+        child = render.Marquee(
+            width = 64,
+            child = render.Text(content = title, color = WHITE, font = FONT),
+        ),
+    )
+
 def render_event(event):
     date_str = format_date(event["start"])
     title = event["summary"]  # preserved exactly as in the calendar
@@ -135,14 +167,9 @@ def render_event(event):
                     child = render.Text(content = date_str, color = PINK, font = FONT),
                 ),
 
-                # ROW 2 — title, full-width marquee (no horizontal padding)
-                render.Padding(
-                    pad = (0, 14, 0, 0),
-                    child = render.Marquee(
-                        width = 64,
-                        child = render.Text(content = title, color = WHITE, font = FONT),
-                    ),
-                ),
+                # ROW 2 — title. Static with a 3px left margin if it fits;
+                # full-width scrolling marquee only when it's too long.
+                title_row(title),
 
                 # ROW 3 — time, 2px from the left
                 render.Padding(
