@@ -429,12 +429,38 @@ def weekday_mon0(ordinal):
     return (ordinal + 3) % 7  # 0 = Monday
 
 def to_int(s, default):
+    # Defensive integer parse: returns default for anything that isn't a clean
+    # (optionally signed) integer, so a malformed RRULE value can never crash
+    # the whole render.
     if s == None:
         return default
     s = s.strip()
-    if s == "":
+    neg = False
+    if len(s) > 0 and (s[0] == "-" or s[0] == "+"):
+        neg = s[0] == "-"
+        s = s[1:]
+    if len(s) == 0:
         return default
-    return int(s)
+    for i in range(len(s)):
+        if s[i] < "0" or s[i] > "9":
+            return default
+    v = int(s)
+    return -v if neg else v
+
+def int_list(s):
+    # Parse a comma-separated list of ints (e.g. BYMONTHDAY="28,29"), skipping
+    # any non-integer parts.
+    out = []
+    for p in s.split(","):
+        v = to_int(p, None)
+        if v != None:
+            out.append(v)
+    return out
+
+def days_in_month(y, m):
+    if m == 12:
+        return days_from_civil(y + 1, 1, 1) - days_from_civil(y, 12, 1)
+    return days_from_civil(y, m + 1, 1) - days_from_civil(y, m, 1)
 
 def parse_rrule(s):
     out = {}
@@ -456,7 +482,19 @@ def byday_set(rr):
                 out.append(BYDAY_INDEX[day])
     return out
 
-def rrule_matches(freq, interval, bydays, bymonthday, s_ord, sy, sm, d_ord, y, m, d):
+def monthday_match(bymonthdays, y, m, d):
+    # True if day d matches any BYMONTHDAY value (negatives count from the end
+    # of the month: -1 = last day).
+    dim = days_in_month(y, m)
+    for target in bymonthdays:
+        t = target
+        if t < 0:
+            t = dim + t + 1
+        if d == t:
+            return True
+    return False
+
+def rrule_matches(freq, interval, bydays, bymonthdays, s_ord, sy, sm, d_ord, y, m, d):
     if freq == "DAILY":
         return (d_ord - s_ord) % interval == 0
     if freq == "WEEKLY":
@@ -468,11 +506,11 @@ def rrule_matches(freq, interval, bydays, bymonthday, s_ord, sy, sm, d_ord, y, m
             return ((mon_d - mon_s) // 7) % interval == 0
         return (d_ord - s_ord) % (7 * interval) == 0
     if freq == "MONTHLY":
-        if d != bymonthday:
+        if not monthday_match(bymonthdays, y, m, d):
             return False
         return ((y - sy) * 12 + (m - sm)) % interval == 0
     if freq == "YEARLY":
-        return m == sm and d == bymonthday and (y - sy) % interval == 0
+        return m == sm and monthday_match(bymonthdays, y, m, d) and (y - sy) % interval == 0
     return False
 
 def rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
@@ -502,7 +540,12 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
     smin = start.minute
     ssec = start.second
     s_ord = days_from_civil(sy, sm, sd)
-    bymonthday = to_int(rr.get("BYMONTHDAY", str(sd)), sd)
+    if "BYMONTHDAY" in rr:
+        bymonthdays = int_list(rr["BYMONTHDAY"])
+        if len(bymonthdays) == 0:
+            bymonthdays = [sd]
+    else:
+        bymonthdays = [sd]
 
     ex = {}
     for e in exdates:
@@ -516,7 +559,7 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
         y = ymd[0]
         m = ymd[1]
         d = ymd[2]
-        if not rrule_matches(freq, interval, bydays, bymonthday, s_ord, sy, sm, d_ord, y, m, d):
+        if not rrule_matches(freq, interval, bydays, bymonthdays, s_ord, sy, sm, d_ord, y, m, d):
             continue
         occ_start = time.time(year = y, month = m, day = d, hour = shour, minute = smin, second = ssec, location = tz)
         if until != None and occ_start > until:
