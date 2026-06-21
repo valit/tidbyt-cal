@@ -345,6 +345,13 @@ def render_no_events(tz):
 # Event selection
 # ---------------------------------------------------------------------------
 
+def all_day_sort_key(e):
+    start_ord = days_from_civil(e["start"].year, e["start"].month, e["start"].day)
+    end_ord   = days_from_civil(e["end"].year,   e["end"].month,   e["end"].day)
+    return (end_ord - start_ord,  # 1. duration ascending (shortest first)
+            -start_ord,            # 2. start descending (most recently started first)
+            e["summary"])          # 3. alphabetical by title
+
 def select_event(events, now, tz):
     timed = [e for e in events if not e["all_day"]]
 
@@ -380,12 +387,16 @@ def select_event(events, now, tz):
         if same_day(e["start"], now):
             timed_today_existed = True
 
-    # 4. If there were no timed events at all today, fall back to a today
-    #    all-day event (e.g. a holiday) before any placeholder/tomorrow logic.
+    # 4. If there were no timed events at all today, fall back to today's
+    #    all-day events (e.g. holidays), cycling through them if multiple.
     if not timed_today_existed:
-        for e in events:
-            if e["all_day"] and same_day(e["start"], now):
-                return e
+        all_day_today = [e for e in events if e["all_day"] and same_day(e["start"], now)]
+        n = len(all_day_today)
+        if n == 1:
+            return all_day_today[0]
+        if n > 1:
+            all_day_today = sorted(all_day_today, key = all_day_sort_key)
+            return all_day_today[(now.unix // 60) % n]
 
     # 5. No timed events remain today.
     if now.hour < 20:
