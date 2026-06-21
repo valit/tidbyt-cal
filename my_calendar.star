@@ -49,6 +49,17 @@ FONT = "tb-8"
 MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
 TTL_SECONDS = 300  # cache the iCal fetch for 5 minutes
+
+# Two-line phrases shown on days with zero events scheduled.
+# Selected by date ordinal (stable all day, changes at midnight).
+QUIET_PHRASES = [
+    ["Today is",     "a blank page"],
+    ["Time to",      "breathe"],
+    ["The day is",   "wide open"],
+    ["No agenda,",   "no rush."],
+    ["Let the good", "times roll"],
+    ["Room to",      "wander"],
+]
 SWITCH_LEAD = 5 * 60  # seconds: switch to a contiguous next event 5 min early
 
 # tb-8 per-character advance widths in pixels (measured empirically). Used to
@@ -70,6 +81,7 @@ def text_width(s):
 # actual date. Must be False before committing — will break the easter egg for
 # all real users if left True.
 TEST_FORCE_DEC31 = False
+
 
 def is_new_years_eve(now):
     # New Year's Eve easter egg trigger (Dec 31). TEST_FORCE_DEC31 forces it on
@@ -107,6 +119,8 @@ def main(config):
     events = fetch_events(tz, ical_url, now)
     event = select_event(events, now, tz)
 
+    if event == "EMPTY_DAY":
+        return render_empty_day(now)
     if event == None:
         return render_no_events(tz)
 
@@ -233,6 +247,40 @@ def render_no_url():
         ),
     )
 
+def render_empty_day(now):
+    date_str = format_date(now)
+    idx = days_from_civil(now.year, now.month, now.day) % 6
+    phrase = QUIET_PHRASES[idx]
+    return render.Root(
+        child = render.Stack(
+            children = [
+                render.Box(width = 64, height = 32, color = BLACK),
+
+                # ROW 1 — calendar icon + date
+                render.Padding(
+                    pad = (3, 3, 0, 0),
+                    child = render.Image(src = CALENDAR_PNG, width = 8, height = 8),
+                ),
+                render.Padding(
+                    pad = (14, 3, 0, 0),
+                    child = render.Text(content = date_str, color = PINK, font = FONT),
+                ),
+
+                # ROW 2 — first line of phrase
+                render.Padding(
+                    pad = (3, 14, 0, 0),
+                    child = render.Text(content = phrase[0], color = WHITE, font = FONT),
+                ),
+
+                # ROW 3 — second line of phrase
+                render.Padding(
+                    pad = (3, 22, 0, 0),
+                    child = render.Text(content = phrase[1], color = WHITE, font = FONT),
+                ),
+            ],
+        ),
+    )
+
 def render_no_events(tz):
     # Same 3-row layout as the main display: icon + today's date on top, then
     # two static yellow lines (no marquee).
@@ -341,8 +389,9 @@ def select_event(events, now, tz):
 
     # 5. No timed events remain today.
     if now.hour < 20:
-        # 4a. Before 8 PM → placeholder.
-        return None
+        if not timed_today_existed:
+            return "EMPTY_DAY"  # zero events ever scheduled today
+        return None  # had events but they're all finished
 
     # Easter egg: on Dec 31, stay on the no-events screen through midnight
     # instead of jumping ahead to tomorrow's (next year's) first event.
