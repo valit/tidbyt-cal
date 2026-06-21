@@ -117,7 +117,7 @@ def main(config):
         return render_no_url()
 
     events = fetch_events(tz, ical_url, now)
-    event = select_event(events, now, tz)
+    event = select_event(events, now)
 
     if event == "EMPTY_DAY":
         return render_empty_day(now)
@@ -352,7 +352,7 @@ def all_day_sort_key(e):
             -start_ord,            # 2. start descending (most recently started first)
             e["summary"])          # 3. alphabetical by title
 
-def select_event(events, now, tz):
+def select_event(events, now):
     timed = [e for e in events if not e["all_day"]]
 
     # 1. Timed event currently in progress (earliest end if several overlap).
