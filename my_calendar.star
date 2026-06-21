@@ -137,7 +137,7 @@ def get_schema():
             schema.Text(
                 id = "ical_url",
                 name = "iCal URL",
-                desc = "Private Google Calendar iCal feed URL (.ics)",
+                desc = "Enter your Google calendar's secret address in iCal format. You can find it in your calendar settings.",
                 icon = "calendar",
             ),
             schema.Location(
