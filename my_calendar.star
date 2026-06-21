@@ -573,6 +573,41 @@ def byday_set(rr):
                 out.append(BYDAY_INDEX[day])
     return out
 
+def parse_byday_ordinals(rr):
+    # For MONTHLY rules: parses BYDAY codes that carry an ordinal prefix (e.g.
+    # "3MO" = 3rd Monday, "-1TU" = last Tuesday) into (ordinal, weekday_index)
+    # pairs.  Codes without a prefix (plain "MO") are ignored here — they have
+    # no ordinal semantics in a MONTHLY rule.
+    out = []
+    if "BYDAY" not in rr:
+        return out
+    for code in rr["BYDAY"].split(","):
+        code = code.strip().upper()
+        if len(code) >= 2:
+            day = code[-2:]
+            prefix = code[:-2]
+            if day in BYDAY_INDEX and prefix != "":
+                n = to_int(prefix, None)
+                if n != None:
+                    out.append((n, BYDAY_INDEX[day]))
+    return out
+
+def nth_weekday_match(d, d_ord, dim, specs):
+    # True if day d/d_ord is the Nth occurrence of the target weekday within
+    # its month (dim = days in that month).  Positive n counts from the start
+    # (1 = first); negative n counts from the end (-1 = last).
+    wd = weekday_mon0(d_ord)
+    for n, target_wd in specs:
+        if wd != target_wd:
+            continue
+        if n > 0:
+            if (d - 1) // 7 + 1 == n:
+                return True
+        elif n < 0:
+            if (dim - d) // 7 + 1 == -n:
+                return True
+    return False
+
 def monthday_match(bymonthdays, y, m, d):
     # True if day d matches any BYMONTHDAY value (negatives count from the end
     # of the month: -1 = last day).
@@ -585,7 +620,7 @@ def monthday_match(bymonthdays, y, m, d):
             return True
     return False
 
-def rrule_matches(freq, interval, bydays, bymonthdays, s_ord, sy, sm, d_ord, y, m, d):
+def rrule_matches(freq, interval, bydays, bymonthdays, byday_ordinals, s_ord, sy, sm, d_ord, y, m, d):
     if freq == "DAILY":
         return (d_ord - s_ord) % interval == 0
     if freq == "WEEKLY":
@@ -597,8 +632,14 @@ def rrule_matches(freq, interval, bydays, bymonthdays, s_ord, sy, sm, d_ord, y, 
             return ((mon_d - mon_s) // 7) % interval == 0
         return (d_ord - s_ord) % (7 * interval) == 0
     if freq == "MONTHLY":
-        if not monthday_match(bymonthdays, y, m, d):
-            return False
+        if len(byday_ordinals) > 0:
+            # BYDAY with ordinal (e.g. 3MO): match the Nth weekday of the month.
+            dim = days_in_month(y, m)
+            if not nth_weekday_match(d, d_ord, dim, byday_ordinals):
+                return False
+        else:
+            if not monthday_match(bymonthdays, y, m, d):
+                return False
         return ((y - sy) * 12 + (m - sm)) % interval == 0
     if freq == "YEARLY":
         return m == sm and monthday_match(bymonthdays, y, m, d) and (y - sy) % interval == 0
@@ -620,6 +661,7 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
     if interval < 1:
         interval = 1
     bydays = byday_set(rr)
+    byday_ordinals = parse_byday_ordinals(rr)
     until = parse_dt(rr["UNTIL"], "", tz) if "UNTIL" in rr else None
     count = to_int(rr["COUNT"], -1) if "COUNT" in rr else -1
     dur = end - start
@@ -650,7 +692,7 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
         y = ymd[0]
         m = ymd[1]
         d = ymd[2]
-        if not rrule_matches(freq, interval, bydays, bymonthdays, s_ord, sy, sm, d_ord, y, m, d):
+        if not rrule_matches(freq, interval, bydays, bymonthdays, byday_ordinals, s_ord, sy, sm, d_ord, y, m, d):
             continue
         occ_start = time.time(year = y, month = m, day = d, hour = shour, minute = smin, second = ssec, location = tz)
         if until != None and occ_start > until:
