@@ -431,8 +431,41 @@ def fetch_events(tz, ical_url, now):
         return []
     return parse_ical(resp.body(), tz, now)
 
+def collect_recurrence_overrides(lines, tz):
+    # Pre-scan: find VEVENTs that carry RECURRENCE-ID (exception overrides).
+    # Returns {uid: [overridden_occurrence_time, ...]} so that expand_rrule can
+    # suppress the original occurrence that was replaced by the exception event.
+    overrides = {}
+    in_event = False
+    uid = ""
+    rec_id = None
+    rec_id_params = ""
+    for line in lines:
+        if line == "BEGIN:VEVENT":
+            in_event = True
+            uid = ""
+            rec_id = None
+            rec_id_params = ""
+        elif line == "END:VEVENT":
+            if uid != "" and rec_id != None:
+                if uid not in overrides:
+                    overrides[uid] = []
+                overrides[uid].append(parse_dt(rec_id, rec_id_params, tz))
+            in_event = False
+        elif in_event:
+            name, params, value = split_property(line)
+            if name == "UID":
+                uid = value.strip()
+            elif name == "RECURRENCE-ID":
+                rec_id = value
+                rec_id_params = params
+    return overrides
+
 def parse_ical(body, tz, now):
     lines = unfold(body)
+
+    # Pre-scan for RECURRENCE-ID overrides before expanding any RRULEs.
+    uid_overrides = collect_recurrence_overrides(lines, tz)
 
     # We only ever care about events occurring today or tomorrow, so recurring
     # events are expanded into just those two candidate days.
@@ -441,6 +474,7 @@ def parse_ical(body, tz, now):
 
     events = []
     in_event = False
+    uid = ""
     summary = ""
     start = None
     end = None
@@ -452,6 +486,7 @@ def parse_ical(body, tz, now):
     for line in lines:
         if line == "BEGIN:VEVENT":
             in_event = True
+            uid = ""
             summary = ""
             start = None
             end = None
@@ -465,8 +500,10 @@ def parse_ical(body, tz, now):
                     end = add_seconds(start, 60 * 60)  # default 1h
                 title = summary if summary != "" else "(no title)"
                 if rrule != "":
-                    # Recurring: emit only the occurrences that land in our window.
-                    for occ in expand_rrule(start, end, all_day, rrule, exdates, tz, window):
+                    # Recurring: emit only the occurrences that land in our window,
+                    # skipping any that have been overridden via RECURRENCE-ID.
+                    rid_overrides = uid_overrides.get(uid, [])
+                    for occ in expand_rrule(start, end, all_day, rrule, exdates, rid_overrides, tz, window):
                         occ["summary"] = title
                         events.append(occ)
                 else:
@@ -479,7 +516,9 @@ def parse_ical(body, tz, now):
             in_event = False
         elif in_event:
             name, params, value = split_property(line)
-            if name == "SUMMARY":
+            if name == "UID":
+                uid = value.strip()
+            elif name == "SUMMARY":
                 summary = unescape(value)
             elif name == "DTSTART":
                 start = parse_dt(value, params, tz)
@@ -665,7 +704,7 @@ def rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
         return (d_ord - s_ord) // (7 * interval) <= count - 1
     return True  # weekly+byday / monthly / yearly counts not enforced
 
-def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
+def expand_rrule(start, end, all_day, rrule_str, exdates, recurrence_id_overrides, tz, window):
     rr = parse_rrule(rrule_str)
     freq = rr.get("FREQ", "")
     interval = to_int(rr.get("INTERVAL", "1"), 1)
@@ -695,6 +734,12 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
     for e in exdates:
         ex[(e.year, e.month, e.day)] = True
 
+    # Build a precise (y, m, d, h, min, sec) set for RECURRENCE-ID suppression.
+    # Keyed by local-timezone components to match occ_start computed below.
+    rid_ex = {}
+    for t in recurrence_id_overrides:
+        rid_ex[(t.year, t.month, t.day, t.hour, t.minute, t.second)] = True
+
     occs = []
     for d_ord in window:
         if d_ord < s_ord:
@@ -711,6 +756,8 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, tz, window):
         if not rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
             continue
         if (y, m, d) in ex:
+            continue
+        if (y, m, d, shour, smin, ssec) in rid_ex:
             continue
         occs.append({"start": occ_start, "end": occ_start + dur, "all_day": all_day})
     return occs
