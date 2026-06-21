@@ -7,7 +7,7 @@ with a pixel-precise three-row layout on the 64x32 display.
 LAYOUT (64x32, origin top-left)
   ROW 1  calendar3.png icon (8x8) at x=2,y=2  +  date in magenta
   ROW 2  event title (white, as written), marquee-scrolled full width
-  ROW 3  time in yellow ("At H:MM am/pm" or "All day"), near the bottom
+  ROW 3  time in yellow ("H:MM am/pm" or "All day"), near the bottom
 
   All text uses the standard Tidbyt font "tb-8" (baseline = box top + 7,
   lowest glyph pixel = box top + 6).
@@ -66,8 +66,9 @@ def text_width(s):
         w += CHAR_ADV.get(s[i], DEFAULT_ADV)
     return w - 1
 
-# When True, the app pretends every day is December 31st so the New Year's Eve
-# easter egg can be previewed on any date. Must stay False in production.
+# DEV ONLY: set True to preview the Dec 31 easter egg without waiting for the
+# actual date. Must be False before committing — will break the easter egg for
+# all real users if left True.
 TEST_FORCE_DEC31 = False
 
 def is_new_years_eve(now):
@@ -331,14 +332,14 @@ def select_event(events, now, tz):
         if same_day(e["start"], now):
             timed_today_existed = True
 
-    # 5. If there were no timed events at all today, fall back to a today
+    # 4. If there were no timed events at all today, fall back to a today
     #    all-day event (e.g. a holiday) before any placeholder/tomorrow logic.
     if not timed_today_existed:
         for e in events:
             if e["all_day"] and same_day(e["start"], now):
                 return e
 
-    # 4. No timed events remain today.
+    # 5. No timed events remain today.
     if now.hour < 20:
         # 4a. Before 8 PM → placeholder.
         return None
