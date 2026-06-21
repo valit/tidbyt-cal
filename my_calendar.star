@@ -101,7 +101,7 @@ def main(config):
 
     ical_url = config.get("ical_url")
     if not ical_url:
-        return render_message("Set ICAL_URL")
+        return render_no_url()
 
     events = fetch_events(tz, ical_url, now)
     event = select_event(events, now, tz)
@@ -200,14 +200,35 @@ def render_event(event):
         ),
     )
 
-def render_message(msg):
-    # Simple centered message (e.g. when the iCal URL config is missing).
+def render_no_url():
     return render.Root(
-        child = render.Box(
-            width = 64,
-            height = 32,
-            color = BLACK,
-            child = render.WrappedText(content = msg, color = WHITE, font = FONT, align = "center", width = 60),
+        child = render.Stack(
+            children = [
+                render.Box(width = 64, height = 32, color = BLACK),
+
+                # ROW 1 — calendar icon + greeting
+                render.Padding(
+                    pad = (3, 3, 0, 0),
+                    child = render.Image(src = CALENDAR_PNG, width = 8, height = 8),
+                ),
+                render.Padding(
+                    pad = (14, 3, 0, 0),
+                    child = render.Text(content = "Hello :)", color = PINK, font = FONT),
+                ),
+
+                # ROW 2 — empty
+
+                # ROW 3 — scrolling instruction, same pause-then-scroll as title_row
+                render.Padding(
+                    pad = (0, 22, 0, 0),
+                    child = render.Marquee(
+                        width = 64,
+                        offset_start = 3,
+                        delay = 10,
+                        child = render.Text(content = "Enter your calendar URL", color = WHITE, font = FONT),
+                    ),
+                ),
+            ],
         ),
     )
 
