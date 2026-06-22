@@ -39,9 +39,9 @@ pixlet render my_calendar.star ical_url="$ICAL_URL" -o my_calendar.webp
 
 # --- Push to both devices --------------------------------------------------
 echo "Pushing to device 1..."
-pixlet push honestly-winning-pet-bulbul-3b3 my_calendar.webp -t "$TIDBYT_TOKEN_1" -i mycalendar
+pixlet push honestly-winning-pet-bulbul-3b3 my_calendar.webp -t "$TIDBYT_TOKEN_1" -i helloCal
 
 echo "Pushing to device 2..."
-pixlet push insecurely-valued-forgiving-salamander-ca7 my_calendar.webp -t "$TIDBYT_TOKEN_2" -i mycalendar
+pixlet push insecurely-valued-forgiving-salamander-ca7 my_calendar.webp -t "$TIDBYT_TOKEN_2" -i helloCal
 
 echo "Done."
