@@ -13,7 +13,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      actions: write  # allows reading and writing repository variables (ledger)
+      contents: write  # allows committing ledger.json back to the repo
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -31,6 +31,13 @@ jobs:
           ICAL_URL: ${{ secrets.ICAL_URL }}
           CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
           DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
           GITHUB_REPO: ${{ github.repository }}
         run: python3 calendar_check.py
+
+      - name: Commit ledger if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ledger.json
+          git diff --staged --quiet && echo "Ledger unchanged" || \
+            git commit -m "chore: update render schedule ledger [skip ci]" && git push

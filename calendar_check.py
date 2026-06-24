@@ -9,20 +9,17 @@ Computes display-change moments from the iCal feed and manages one-time
 cron-job.org jobs so renders fire exactly at those moments rather than on a
 fixed 5-minute cycle.
 
-Ledger approach: a GitHub repo variable (TIDBYT_SCHEDULED_MOMENTS) tracks
-which cron-job.org jobs we've created, so we never need to call GET /jobs.
-This keeps cron-job.org API usage well within the 100-calls/day free-tier
-cap — API calls only happen when the calendar actually changes.
+Ledger: ledger.json (committed to the repo) tracks which cron-job.org jobs
+we've created, so we never need to call GET /jobs. The workflow commits any
+changes to ledger.json back to the repo after this script runs.
+cron-job.org API calls only happen when the calendar actually changes.
 
 Required environment variables:
-  ICAL_URL              — private Google Calendar iCal feed URL
-  CRONJOB_API_KEY       — cron-job.org API key
-  GH_TOKEN              — built-in GITHUB_TOKEN (injected automatically by the
-                          workflow); needs actions: write to read/write repo variables
-  DISPATCH_TOKEN        — GitHub PAT; used only when embedding an auth header in
-                          cron-job.org one-time jobs so they can trigger dispatches
-  GITHUB_REPO           — e.g. "valit/tidbyt-cal" (set automatically
-                          via ${{ github.repository }} in the workflow)
+  ICAL_URL        — private Google Calendar iCal feed URL
+  CRONJOB_API_KEY — cron-job.org API key
+  DISPATCH_TOKEN  — GitHub PAT; used for direct dispatch triggers and embedded
+                    in cron-job.org one-time job request headers
+  GITHUB_REPO     — e.g. "valit/tidbyt-cal" (set via ${{ github.repository }})
 
 One-time setup after deploying this script:
   Update cron-job.org job 7866088 so its request body is
@@ -51,12 +48,10 @@ EXTENDED_THRESHOLD = 4 * 3600  # events longer than this are "extended" (flights
 LOOKAHEAD          = 60 * 60   # schedule moments up to this far ahead
 NEAR_TERM_SECS     = 120       # moments ≤ this close → trigger render directly now
 
-# ── External API config ────────────────────────────────────────────────────────
-
 CRONJOB_BASE     = "https://api.cron-job.org"
 GITHUB_API_BASE  = "https://api.github.com"
-LEDGER_VAR       = "TIDBYT_SCHEDULED_MOMENTS"  # GitHub repo variable name
 JOB_TITLE_PREFIX = "tidbyt-moment-"
+LEDGER_FILE      = "ledger.json"
 
 
 # ── HTTP helper ────────────────────────────────────────────────────────────────
@@ -91,14 +86,13 @@ def moment_title(moment):
     return JOB_TITLE_PREFIX + moment.strftime("%Y%m%dT%H%M")
 
 
-def create_job(api_key, github_token, repo, moment):
+def create_job(api_key, dispatch_token, repo, moment):
     """Create a one-time cron-job.org job that fires at *moment* (UTC datetime,
     already floored to the minute). Returns the integer jobId, or None on failure.
 
     The job POSTs {"event_type":"tidbyt-push"} to the GitHub dispatches API,
-    which triggers render.yml. The schedule is set to a specific
-    month/day/hour/minute so it fires exactly once (then again a year later,
-    but the next heartbeat will delete it as stale before that).
+    which triggers render.yml. The schedule fires exactly once (then again a
+    year later, but the next heartbeat will delete it as stale before that).
     """
     payload = {
         "job": {
@@ -117,7 +111,7 @@ def create_job(api_key, github_token, repo, moment):
             "requestMethod": 1,  # POST
             "requestBody": json.dumps({"event_type": "tidbyt-push"}),
             "requestHeaders": [
-                {"name": "Authorization", "value": f"Bearer {github_token}"},
+                {"name": "Authorization", "value": f"Bearer {dispatch_token}"},
                 {"name": "Accept",        "value": "application/vnd.github.v3+json"},
                 {"name": "Content-Type",  "value": "application/json"},
             ],
@@ -142,69 +136,38 @@ def delete_job(api_key, job_id):
         print(f"  ! delete_job {job_id} unexpected status {status}", file=sys.stderr)
 
 
-# ── GitHub API — ledger (repo variable) ────────────────────────────────────────
+# ── Ledger (ledger.json committed to repo) ─────────────────────────────────────
 
-def _gh_headers(token):
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-    }
-
-
-def read_ledger(token, repo):
-    """Read the scheduled-jobs ledger from the GitHub repo variable.
-    Returns (ledger_dict, var_exists_bool).
-    ledger_dict has keys: ical_hash (str), jobs (list of {job_id, moment}).
+def read_ledger():
+    """Read the scheduled-jobs ledger from ledger.json.
+    Returns a dict with keys: ical_hash (str), jobs (list of {job_id, moment}).
     """
-    status, data = http(
-        "GET",
-        f"{GITHUB_API_BASE}/repos/{repo}/actions/variables/{LEDGER_VAR}",
-        _gh_headers(token),
-    )
-    if status == 404:
-        return {"ical_hash": "", "jobs": []}, False
-    if status != 200:
-        raise RuntimeError(f"read_ledger: unexpected status {status}: {data}")
     try:
-        return json.loads(data["value"]), True
-    except (KeyError, json.JSONDecodeError):
-        # Variable exists but value is malformed — treat as empty.
-        return {"ical_hash": "", "jobs": []}, True
+        with open(LEDGER_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"ical_hash": "", "jobs": []}
 
 
-def write_ledger(token, repo, ledger, var_exists):
-    """Write the ledger back to the GitHub repo variable.
-    Uses PATCH if the variable already exists, POST to create it on first run.
-    """
-    value = json.dumps(ledger, separators=(",", ":"))
-    body = {"name": LEDGER_VAR, "value": value}
-    if var_exists:
-        status, data = http(
-            "PATCH",
-            f"{GITHUB_API_BASE}/repos/{repo}/actions/variables/{LEDGER_VAR}",
-            _gh_headers(token),
-            body,
-        )
-        if status not in (200, 204):
-            raise RuntimeError(f"write_ledger PATCH: unexpected status {status}: {data}")
-    else:
-        status, data = http(
-            "POST",
-            f"{GITHUB_API_BASE}/repos/{repo}/actions/variables",
-            _gh_headers(token),
-            body,
-        )
-        if status not in (200, 201):
-            raise RuntimeError(f"write_ledger POST: unexpected status {status}: {data}")
+def write_ledger(ledger):
+    """Write the ledger to ledger.json. The workflow commits it back to the repo."""
+    with open(LEDGER_FILE, "w") as f:
+        json.dump(ledger, f, separators=(",", ":"))
+        f.write("\n")
 
 
-def trigger_render(token, repo):
+# ── GitHub dispatch ────────────────────────────────────────────────────────────
+
+def trigger_render(dispatch_token, repo):
     """Fire a repository_dispatch event to trigger render.yml immediately."""
     status, data = http(
         "POST",
         f"{GITHUB_API_BASE}/repos/{repo}/dispatches",
-        _gh_headers(token),
+        {
+            "Authorization": f"Bearer {dispatch_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+        },
         {"event_type": "tidbyt-push"},
     )
     if status not in (200, 204):
@@ -271,7 +234,7 @@ def compute_moments(events, now):
       alert       — event.start − ALERT_WINDOW (alert flash begins)
       start       — event.start                (event is now current)
       end         — event.end                  (event is over; show next)
-      persistence — event.start + PERSISTENCE_TIME  (extended event defers; regular only)
+      persistence — event.start + PERSISTENCE_TIME  (extended event defers)
     """
     cutoff = now + datetime.timedelta(seconds=LOOKAHEAD)
     moments = set()
@@ -302,8 +265,7 @@ def compute_moments(events, now):
 def main():
     ical_url       = os.environ["ICAL_URL"]
     cronjob_key    = os.environ["CRONJOB_API_KEY"]
-    gh_token       = os.environ["GH_TOKEN"]        # built-in workflow token; reads/writes ledger
-    dispatch_token = os.environ["DISPATCH_TOKEN"]  # PAT; embedded in cron-job.org job headers
+    dispatch_token = os.environ["DISPATCH_TOKEN"]
     gh_repo        = os.environ.get("GITHUB_REPO", "valit/tidbyt-cal")
 
     # Floor now to the minute for consistent moment comparisons.
@@ -314,8 +276,8 @@ def main():
     ical_text = fetch_ical(ical_url)
     ical_hash = hashlib.sha256(ical_text.encode()).hexdigest()[:16]
 
-    # 2. Read ledger (one GitHub API call; zero cron-job.org calls).
-    ledger, var_exists = read_ledger(gh_token, gh_repo)
+    # 2. Read ledger from ledger.json (already on disk from git checkout).
+    ledger      = read_ledger()
     ledger_jobs = ledger.get("jobs", [])  # list of {job_id: int, moment: ISO str}
 
     # 3. Compute the desired set of future moments from the current calendar.
@@ -360,10 +322,10 @@ def main():
         if job_id is not None:
             surviving.append({"job_id": job_id, "moment": moment.isoformat()})
 
-    # 9. Write the updated ledger back to the GitHub repo variable.
+    # 9. Write the updated ledger to disk; the workflow commits it back to the repo.
     new_ledger = {"ical_hash": ical_hash, "jobs": surviving}
-    write_ledger(gh_token, gh_repo, new_ledger, var_exists)
-    print(f"  Ledger saved: {len(surviving)} job(s) now scheduled.")
+    write_ledger(new_ledger)
+    print(f"  Ledger written: {len(surviving)} job(s) now scheduled.")
 
 
 if __name__ == "__main__":
