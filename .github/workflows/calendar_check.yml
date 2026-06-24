@@ -1,0 +1,33 @@
+name: Calendar Check
+
+# Triggered by cron-job.org every 5 minutes via repository_dispatch.
+# One-time setup required: update cron-job.org job 7866088 so its request
+# body is {"event_type":"tidbyt-check"} (instead of "tidbyt-push") to
+# redirect the heartbeat here. render.yml handles "tidbyt-push" events.
+on:
+  repository_dispatch:
+    types: [tidbyt-check]
+  workflow_dispatch:  # manual trigger for testing
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install icalendar recurring-ical-events
+
+      - name: Run calendar check
+        env:
+          ICAL_URL: ${{ secrets.ICAL_URL }}
+          CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
+          GITHUB_DISPATCH_TOKEN: ${{ secrets.GITHUB_DISPATCH_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: python3 calendar_check.py

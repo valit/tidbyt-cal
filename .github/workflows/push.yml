@@ -1,16 +1,10 @@
 name: Push to Tidbyt
 
 on:
-  schedule:
-    # Every 5 minutes. Note: GitHub's scheduler is best-effort and can be
-    # delayed (sometimes several minutes) when the platform is busy.
-    - cron: "*/5 * * * *"
-  # Allow manual runs from the Actions tab for testing.
+  # Manual fallback only. render.yml is the sole handler for repository_dispatch
+  # (cron-job.org-triggered) renders. Use this workflow from the Actions tab
+  # when you need to force a render without touching the smart scheduler.
   workflow_dispatch:
-  # External trigger (e.g. cron-job.org) for a reliable 5-minute cadence.
-  # Fire by POSTing {"event_type":"tidbyt-push"} to the repo dispatches API.
-  repository_dispatch:
-    types: [tidbyt-push]
 
 jobs:
   push:

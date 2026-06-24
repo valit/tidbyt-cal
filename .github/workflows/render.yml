@@ -1,0 +1,26 @@
+name: Render and Push to Tidbyt
+
+# Triggered on demand by cron-job.org one-time jobs (created by
+# calendar_check.py) or manually from the Actions tab.
+# This is the sole handler for repository_dispatch "tidbyt-push" events.
+# push.yml (workflow_dispatch only) remains as a manual fallback.
+on:
+  repository_dispatch:
+    types: [tidbyt-push]
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Render and push to Tidbyt
+        env:
+          ICAL_URL: ${{ secrets.ICAL_URL }}
+          TIDBYT_TOKEN_1: ${{ secrets.TIDBYT_TOKEN_1 }}
+          TIDBYT_TOKEN_2: ${{ secrets.TIDBYT_TOKEN_2 }}
+        run: |
+          chmod +x push.sh
+          ./push.sh
