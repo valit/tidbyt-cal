@@ -45,7 +45,7 @@ PREP_TIME          = 15 * 60   # show upcoming event this many seconds early
 ALERT_WINDOW       = 5 * 60    # alert flash begins this many seconds before start
 PERSISTENCE_TIME   = 10 * 60   # extended events hold for this long before deferring
 EXTENDED_THRESHOLD = 4 * 3600  # events longer than this are "extended" (flights, etc.)
-LOOKAHEAD          = 60 * 60   # schedule moments up to this far ahead
+LOOKAHEAD          = 2 * 60 * 60  # schedule moments up to this far ahead
 NEAR_TERM_SECS     = 120       # moments ≤ this close → trigger render directly now
 
 CRONJOB_BASE     = "https://api.cron-job.org"
@@ -313,9 +313,13 @@ def main():
                  if m not in future and m < now]
 
     # 6. Early exit: nothing to do and calendar hasn't changed.
+    #    Exception: when the ledger is empty and no moments exist the display may
+    #    be stale, so fall through to the safety-net render at the end.
     if not near and not to_create and not to_delete and ledger.get("ical_hash") == ical_hash:
-        print("  No changes — skipping cron-job.org API calls.")
-        return
+        if ledger_jobs or all_moments:
+            print("  No changes — skipping cron-job.org API calls.")
+            return
+        # Idle with empty ledger — fall through to safety-net render.
 
     print(f"  ical_hash now={ical_hash} prev={ledger.get('ical_hash', 'none')}")
     print(f"  Future moments ({len(future)}): {[m.isoformat() for m in sorted(future)]}")
@@ -336,6 +340,14 @@ def main():
     new_ledger = {"ical_hash": ical_hash, "jobs": surviving}
     write_ledger(new_ledger)
     print(f"  Ledger written: {len(surviving)} job(s) now scheduled.")
+
+    # 10. Safety net: if no moments were found and the ledger is now empty, the
+    #     display may be showing stale content (e.g. an event that just ended with
+    #     no upcoming events in the lookahead window). Render immediately so the
+    #     display always reflects the current calendar state.
+    if not surviving and not all_moments:
+        print("  Safety-net: empty ledger and no upcoming moments — triggering render.")
+        trigger_render(dispatch_token, gh_repo)
 
 
 if __name__ == "__main__":
