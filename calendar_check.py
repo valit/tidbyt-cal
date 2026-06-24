@@ -110,11 +110,13 @@ def create_job(api_key, dispatch_token, repo, moment):
                 "wdays":   [-1],   # -1 = any day of week (not constraining)
             },
             "requestMethod": 1,  # POST
-            "requestBody": json.dumps({"event_type": "tidbyt-push"}),
-            "requestHeaders": {
-                "Authorization": f"Bearer {dispatch_token}",
-                "Accept":        "application/vnd.github.v3+json",
-                "Content-Type":  "application/json",
+            "extendedData": {
+                "headers": {
+                    "Authorization": f"Bearer {dispatch_token}",
+                    "Accept":        "application/vnd.github.v3+json",
+                    "Content-Type":  "application/json",
+                },
+                "body": json.dumps({"event_type": "tidbyt-push"}),
             },
         }
     }
