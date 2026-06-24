@@ -17,7 +17,7 @@ cap — API calls only happen when the calendar actually changes.
 Required environment variables:
   ICAL_URL              — private Google Calendar iCal feed URL
   CRONJOB_API_KEY       — cron-job.org API key
-  GITHUB_DISPATCH_TOKEN — GitHub PAT with repo scope (for triggering
+  DISPATCH_TOKEN        — GitHub PAT with repo scope (for triggering
                           dispatches and reading/writing repo variables)
   GITHUB_REPO           — e.g. "valit/tidbyt-cal" (set automatically
                           via ${{ github.repository }} in the workflow)
@@ -300,7 +300,7 @@ def compute_moments(events, now):
 def main():
     ical_url    = os.environ["ICAL_URL"]
     cronjob_key = os.environ["CRONJOB_API_KEY"]
-    gh_token    = os.environ["GITHUB_DISPATCH_TOKEN"]
+    gh_token    = os.environ["DISPATCH_TOKEN"]
     gh_repo     = os.environ.get("GITHUB_REPO", "valit/tidbyt-cal")
 
     # Floor now to the minute for consistent moment comparisons.
