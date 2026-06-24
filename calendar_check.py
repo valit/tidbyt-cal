@@ -41,10 +41,10 @@ import recurring_ical_events
 
 # ── Display-change timing constants (must mirror my_calendar.star) ─────────────
 
-PREP_TIME          = 15 * 60   # show upcoming event this many seconds early
-ALERT_WINDOW       = 5 * 60    # alert flash begins this many seconds before start
-PERSISTENCE_TIME   = 10 * 60   # extended events hold for this long before deferring
-EXTENDED_THRESHOLD = 4 * 3600  # events longer than this are "extended" (flights, etc.)
+PREP_TIME          = int(os.environ.get("PREP_TIME", 900))
+ALERT_WINDOW       = int(os.environ.get("ALERT_WINDOW", 300))
+PERSISTENCE_TIME   = int(os.environ.get("PERSISTENCE_TIME", 600))
+EXTENDED_THRESHOLD = int(os.environ.get("EXTENDED_THRESHOLD", 14400))
 LOOKAHEAD          = 2 * 60 * 60  # schedule moments up to this far ahead
 NEAR_TERM_SECS     = 120       # moments ≤ this close → trigger render directly now
 

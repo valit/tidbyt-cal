@@ -32,6 +32,10 @@ jobs:
           CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
           DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
+          PREP_TIME: ${{ secrets.PREP_TIME }}
+          ALERT_WINDOW: ${{ secrets.ALERT_WINDOW }}
+          PERSISTENCE_TIME: ${{ secrets.PERSISTENCE_TIME }}
+          EXTENDED_THRESHOLD: ${{ secrets.EXTENDED_THRESHOLD }}
         run: python3 calendar_check.py
 
       - name: Commit ledger if changed

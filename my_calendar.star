@@ -120,8 +120,12 @@ def main(config):
     alert_enabled = config.get("alert_enabled") != "false"
     alert_window_mins = int(config.get("alert_window") or "5")
 
+    prep_time = int(config.get("prep_time") or PREPARATION_TIME)
+    persistence_time = int(config.get("persistence_time") or PERSISTENCE_TIME)
+    extended_threshold = int(config.get("extended_threshold") or EXTENDED_THRESHOLD)
+
     events = fetch_events(tz, ical_url, now)
-    event = select_event(events, now)
+    event = select_event(events, now, prep_time, persistence_time, extended_threshold)
 
     if event == "EMPTY_DAY":
         return render_empty_day(now)
@@ -435,8 +439,8 @@ def all_day_sort_key(e):
         e["summary"],
     )  # 3. alphabetical by title
 
-def is_extended(e):
-    return e["end"].unix - e["start"].unix > EXTENDED_THRESHOLD
+def is_extended(e, extended_threshold = EXTENDED_THRESHOLD):
+    return e["end"].unix - e["start"].unix > extended_threshold
 
 def synthesize_event(group):
     # Given events sharing the same start time: return the single event unchanged,
@@ -458,7 +462,7 @@ def synthesize_event(group):
         "all_day": False,
     }
 
-def select_event(events, now):
+def select_event(events, now, prep_time = PREPARATION_TIME, persistence_time = PERSISTENCE_TIME, extended_threshold = EXTENDED_THRESHOLD):
     timed = [e for e in events if not e["all_day"]]
 
     # Step 1 — Current event: most recently started wins; synthesize same-start group.
@@ -492,14 +496,14 @@ def select_event(events, now):
     if current != None:
         # 3a. Prep check: always first; applies to all event types; overrides persistence.
         if next_timed != None:
-            if now >= add_seconds(next_timed["start"], -PREPARATION_TIME):
+            if now >= add_seconds(next_timed["start"], -prep_time):
                 return next_timed
 
-        # 3b. Extended persistence: after PERSISTENCE_TIME elapses, defer to regular events.
-        if is_extended(current):
-            if now >= add_seconds(current["start"], PERSISTENCE_TIME):
+        # 3b. Extended persistence: after persistence_time elapses, defer to regular events.
+        if is_extended(current, extended_threshold):
+            if now >= add_seconds(current["start"], persistence_time):
                 # i. Regular event currently in progress?
-                reg_ip = [e for e in current_candidates if not is_extended(e)]
+                reg_ip = [e for e in current_candidates if not is_extended(e, extended_threshold)]
                 if len(reg_ip) > 0:
                     reg_best = reg_ip[0]
                     for e in reg_ip[1:]:
@@ -514,7 +518,7 @@ def select_event(events, now):
                     return synthesize_event(reg_same_start)
 
                 # ii. Regular event upcoming today?
-                reg_up = [e for e in upcoming if not is_extended(e) and same_day(e["start"], now)]
+                reg_up = [e for e in upcoming if not is_extended(e, extended_threshold) and same_day(e["start"], now)]
                 if len(reg_up) > 0:
                     reg_min = reg_up[0]["start"]
                     for e in reg_up[1:]:

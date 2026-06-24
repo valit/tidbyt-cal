@@ -35,7 +35,10 @@ pixlet version
 
 # --- Render ----------------------------------------------------------------
 echo "Rendering my_calendar.star..."
-pixlet render my_calendar.star ical_url="$ICAL_URL" -o my_calendar.webp
+prep_time=${PREP_TIME:-900}
+persistence_time=${PERSISTENCE_TIME:-600}
+extended_threshold=${EXTENDED_THRESHOLD:-14400}
+pixlet render my_calendar.star ical_url="$ICAL_URL" prep_time="$prep_time" persistence_time="$persistence_time" extended_threshold="$extended_threshold" -o my_calendar.webp
 
 # --- Push to both devices --------------------------------------------------
 echo "Pushing to device 1..."

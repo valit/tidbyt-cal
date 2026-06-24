@@ -21,6 +21,9 @@ jobs:
           ICAL_URL: ${{ secrets.ICAL_URL }}
           TIDBYT_TOKEN_1: ${{ secrets.TIDBYT_TOKEN_1 }}
           TIDBYT_TOKEN_2: ${{ secrets.TIDBYT_TOKEN_2 }}
+          PREP_TIME: ${{ secrets.PREP_TIME }}
+          PERSISTENCE_TIME: ${{ secrets.PERSISTENCE_TIME }}
+          EXTENDED_THRESHOLD: ${{ secrets.EXTENDED_THRESHOLD }}
         run: |
           chmod +x push.sh
           ./push.sh
