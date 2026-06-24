@@ -12,6 +12,8 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write  # allows reading and writing repository variables (ledger)
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -29,5 +31,6 @@ jobs:
           ICAL_URL: ${{ secrets.ICAL_URL }}
           CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
           DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GITHUB_REPO: ${{ github.repository }}
         run: python3 calendar_check.py

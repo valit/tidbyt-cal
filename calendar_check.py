@@ -17,8 +17,10 @@ cap — API calls only happen when the calendar actually changes.
 Required environment variables:
   ICAL_URL              — private Google Calendar iCal feed URL
   CRONJOB_API_KEY       — cron-job.org API key
-  DISPATCH_TOKEN        — GitHub PAT with repo scope (for triggering
-                          dispatches and reading/writing repo variables)
+  GH_TOKEN              — built-in GITHUB_TOKEN (injected automatically by the
+                          workflow); needs actions: write to read/write repo variables
+  DISPATCH_TOKEN        — GitHub PAT; used only when embedding an auth header in
+                          cron-job.org one-time jobs so they can trigger dispatches
   GITHUB_REPO           — e.g. "valit/tidbyt-cal" (set automatically
                           via ${{ github.repository }} in the workflow)
 
@@ -298,10 +300,11 @@ def compute_moments(events, now):
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
-    ical_url    = os.environ["ICAL_URL"]
-    cronjob_key = os.environ["CRONJOB_API_KEY"]
-    gh_token    = os.environ["DISPATCH_TOKEN"]
-    gh_repo     = os.environ.get("GITHUB_REPO", "valit/tidbyt-cal")
+    ical_url       = os.environ["ICAL_URL"]
+    cronjob_key    = os.environ["CRONJOB_API_KEY"]
+    gh_token       = os.environ["GH_TOKEN"]        # built-in workflow token; reads/writes ledger
+    dispatch_token = os.environ["DISPATCH_TOKEN"]  # PAT; embedded in cron-job.org job headers
+    gh_repo        = os.environ.get("GITHUB_REPO", "valit/tidbyt-cal")
 
     # Floor now to the minute for consistent moment comparisons.
     now = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
@@ -326,7 +329,7 @@ def main():
 
     if near:
         print(f"  Near-term: {[m.isoformat() for m in sorted(near)]} → rendering now")
-        trigger_render(gh_token, gh_repo)
+        trigger_render(dispatch_token, gh_repo)
 
     # 5. Build ledger index and compute the diff.
     ledger_by_moment = {
@@ -353,7 +356,7 @@ def main():
     # 8. Create new jobs on cron-job.org and build the surviving ledger.
     surviving = [ledger_by_moment[m] for m in ledger_moments if m in future]
     for moment in sorted(to_create):
-        job_id = create_job(cronjob_key, gh_token, gh_repo, moment)
+        job_id = create_job(cronjob_key, dispatch_token, gh_repo, moment)
         if job_id is not None:
             surviving.append({"job_id": job_id, "moment": moment.isoformat()})
 
