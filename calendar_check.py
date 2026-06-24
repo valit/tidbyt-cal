@@ -100,6 +100,7 @@ def create_job(api_key, dispatch_token, repo, moment):
             "title": moment_title(moment),
             "enabled": True,
             "saveResponses": False,
+            "expiresAt": int((moment + datetime.timedelta(hours=1)).timestamp()),
             "schedule": {
                 "timezone": "UTC",
                 "hours":   [moment.hour],
@@ -110,11 +111,11 @@ def create_job(api_key, dispatch_token, repo, moment):
             },
             "requestMethod": 1,  # POST
             "requestBody": json.dumps({"event_type": "tidbyt-push"}),
-            "requestHeaders": [
-                {"name": "Authorization", "value": f"Bearer {dispatch_token}"},
-                {"name": "Accept",        "value": "application/vnd.github.v3+json"},
-                {"name": "Content-Type",  "value": "application/json"},
-            ],
+            "requestHeaders": {
+                "Authorization": f"Bearer {dispatch_token}",
+                "Accept":        "application/vnd.github.v3+json",
+                "Content-Type":  "application/json",
+            },
         }
     }
     status, data = http("PUT", f"{CRONJOB_BASE}/jobs", _cj_headers(api_key), payload)
