@@ -272,16 +272,22 @@ def main():
     now = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
     print(f"[calendar_check] {now.isoformat()}  repo={gh_repo}")
 
-    # 1. Fetch iCal and compute a short hash for change detection.
+    # 1. Fetch iCal, parse events, and fingerprint from event times only.
+    #    Raw-text hashing is unstable because Google Calendar embeds dynamic
+    #    metadata (DTSTAMP etc.) that changes on every request.
     ical_text = fetch_ical(ical_url)
-    ical_hash = hashlib.sha256(ical_text.encode()).hexdigest()[:16]
+    events    = parse_events(ical_text, now)
+    ical_hash = hashlib.sha256(
+        json.dumps(sorted(
+            (e["start"].isoformat(), e["end"].isoformat()) for e in events
+        )).encode()
+    ).hexdigest()[:16]
 
     # 2. Read ledger from ledger.json (already on disk from git checkout).
     ledger      = read_ledger()
     ledger_jobs = ledger.get("jobs", [])  # list of {job_id: int, moment: ISO str}
 
-    # 3. Compute the desired set of future moments from the current calendar.
-    events      = parse_events(ical_text, now)
+    # 3. Compute the desired set of future moments.
     all_moments = compute_moments(events, now)
 
     # 4. Near-term moments (≤ NEAR_TERM_SECS away): trigger render directly
@@ -299,8 +305,12 @@ def main():
         for e in ledger_jobs
     }
     ledger_moments = set(ledger_by_moment.keys())
-    to_create      = future - ledger_moments
-    to_delete      = [ledger_by_moment[m] for m in ledger_moments if m not in future]
+    to_create = future - ledger_moments
+    # Only delete jobs whose moment is strictly in the past. A job scheduled for
+    # exactly `now` may still be in-flight from cron-job.org — deleting it would
+    # cause the render to be missed (race condition).
+    to_delete = [ledger_by_moment[m] for m in ledger_moments
+                 if m not in future and m < now]
 
     # 6. Early exit: nothing to do and calendar hasn't changed.
     if not near and not to_create and not to_delete and ledger.get("ical_hash") == ical_hash:
