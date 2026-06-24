@@ -41,10 +41,10 @@ import recurring_ical_events
 
 # ── Display-change timing constants (must mirror my_calendar.star) ─────────────
 
-PREP_TIME          = int(os.environ.get("PREP_TIME", 900))
-ALERT_WINDOW       = int(os.environ.get("ALERT_WINDOW", 300))
-PERSISTENCE_TIME   = int(os.environ.get("PERSISTENCE_TIME", 600))
-EXTENDED_THRESHOLD = int(os.environ.get("EXTENDED_THRESHOLD", 14400))
+PREP_TIME          = int(os.environ.get("PREP_TIME") or 900)
+ALERT_WINDOW       = int(os.environ.get("ALERT_WINDOW") or 300)
+PERSISTENCE_TIME   = int(os.environ.get("PERSISTENCE_TIME") or 600)
+EXTENDED_THRESHOLD = int(os.environ.get("EXTENDED_THRESHOLD") or 14400)
 LOOKAHEAD          = 2 * 60 * 60  # schedule moments up to this far ahead
 NEAR_TERM_SECS     = 120       # moments ≤ this close → trigger render directly now
 
