@@ -125,6 +125,11 @@ def main(config):
     extended_threshold = int(config.get("extended_threshold") or EXTENDED_THRESHOLD)
 
     events = fetch_events(tz, ical_url, now)
+
+    ical_url_2 = config.get("ical_url_2")
+    if ical_url_2:
+        events = merge_events(events, fetch_events(tz, ical_url_2, now))
+
     event = select_event(events, now, prep_time, persistence_time, extended_threshold)
 
     if event == "EMPTY_DAY":
@@ -146,6 +151,12 @@ def get_schema():
                 id = "ical_url",
                 name = "iCal URL",
                 desc = "Enter your Google calendar's secret address in iCal format. You can find it in your calendar settings.",
+                icon = "calendar",
+            ),
+            schema.Text(
+                id = "ical_url_2",
+                name = "Second iCal URL (optional)",
+                desc = "Add a second calendar to merge events from.",
                 icon = "calendar",
             ),
             schema.Location(
@@ -583,6 +594,20 @@ def fetch_events(tz, ical_url, now):
         return []
     return parse_ical(resp.body(), tz, now)
 
+def merge_events(events1, events2):
+    seen = {}
+    result = []
+    for e in events1 + events2:
+        uid = e.get("uid", "")
+        if uid != "":
+            key = uid + "|" + str(e["start"].unix)
+        else:
+            key = e["summary"] + "|" + str(e["start"].unix)
+        if key not in seen:
+            seen[key] = True
+            result.append(e)
+    return result
+
 def collect_recurrence_overrides(lines, tz):
     # Pre-scan: find VEVENTs that carry RECURRENCE-ID (exception overrides).
     # Returns {uid: [overridden_occurrence_time, ...]} so that expand_rrule can
@@ -657,9 +682,11 @@ def parse_ical(body, tz, now):
                     rid_overrides = uid_overrides.get(uid, [])
                     for occ in expand_rrule(start, end, all_day, rrule, exdates, rid_overrides, tz, window):
                         occ["summary"] = title
+                        occ["uid"] = uid
                         events.append(occ)
                 else:
                     events.append({
+                        "uid": uid,
                         "summary": title,
                         "start": start,
                         "end": end,
