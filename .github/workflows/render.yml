@@ -19,11 +19,13 @@ jobs:
       - name: Render and push to Tidbyt
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
+          ICAL_URL_PERSONAL: ${{ secrets.ICAL_URL_PERSONAL }}
           TIDBYT_TOKEN_1: ${{ secrets.TIDBYT_TOKEN_1 }}
           TIDBYT_TOKEN_2: ${{ secrets.TIDBYT_TOKEN_2 }}
           PREP_TIME: ${{ secrets.PREP_TIME }}
           PERSISTENCE_TIME: ${{ secrets.PERSISTENCE_TIME }}
           EXTENDED_THRESHOLD: ${{ secrets.EXTENDED_THRESHOLD }}
+          DEVICES_JSON: ${{ toJson(github.event.client_payload.devices) }}
         run: |
           chmod +x push.sh
           ./push.sh

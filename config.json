@@ -1,0 +1,20 @@
+{
+  "calendars": [
+    {"id": "family",   "url_secret": "ICAL_URL"},
+    {"id": "personal", "url_secret": "ICAL_URL_PERSONAL"}
+  ],
+  "devices": [
+    {
+      "name": "bedroom",
+      "device_id": "insecurely-valued-forgiving-salamander-ca7",
+      "token_secret": "TIDBYT_TOKEN_2",
+      "calendars": ["family", "personal"]
+    },
+    {
+      "name": "fireplace",
+      "device_id": "honestly-winning-pet-bulbul-3b3",
+      "token_secret": "TIDBYT_TOKEN_1",
+      "calendars": ["family"]
+    }
+  ]
+}

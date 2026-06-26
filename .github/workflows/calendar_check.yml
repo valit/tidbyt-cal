@@ -29,6 +29,7 @@ jobs:
       - name: Run calendar check
         env:
           ICAL_URL: ${{ secrets.ICAL_URL }}
+          ICAL_URL_PERSONAL: ${{ secrets.ICAL_URL_PERSONAL }}
           CRONJOB_API_KEY: ${{ secrets.CRONJOB_API_KEY }}
           DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
