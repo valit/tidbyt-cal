@@ -14,17 +14,15 @@ set -euo pipefail
 
 CONFIG=config.json
 
-# --- Install pixlet if needed (latest linux_amd64 release) ------------------
+# --- Install pixlet if needed ------------------------------------------------
+# Intentionally pinned to avoid breakage from GitHub API blips when fetching
+# "latest". Bump manually after reviewing pixlet release notes:
+#   https://github.com/tidbyt/pixlet/releases
+PIXLET_VERSION=0.34.0
+
 if ! command -v pixlet >/dev/null 2>&1; then
-  echo "pixlet not found — installing latest linux_amd64 release..."
-  # Fetch the whole API response first, then parse it. Parsing curl's output
-  # through a pipe to an early-exiting tool (grep -m1 / head) makes curl die
-  # with a write error, which pipefail would turn into a script failure.
-  RELEASE_JSON="$(curl -sSL https://api.github.com/repos/tidbyt/pixlet/releases/latest)"
-  VERSION="$(awk -F'"' '/"tag_name"/{print $4; exit}' <<<"$RELEASE_JSON")"
-  VERSION="${VERSION#v}"
-  echo "Installing pixlet v${VERSION}"
-  curl -sSL "https://github.com/tidbyt/pixlet/releases/download/v${VERSION}/pixlet_${VERSION}_linux_amd64.tar.gz" \
+  echo "pixlet not found — installing v${PIXLET_VERSION}..."
+  curl -sSL "https://github.com/tidbyt/pixlet/releases/download/v${PIXLET_VERSION}/pixlet_${PIXLET_VERSION}_linux_amd64.tar.gz" \
     -o /tmp/pixlet.tar.gz
   mkdir -p /tmp/pixlet
   tar -xzf /tmp/pixlet.tar.gz -C /tmp/pixlet
