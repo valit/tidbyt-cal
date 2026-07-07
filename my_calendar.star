@@ -84,6 +84,15 @@ def text_width(s):
 # all real users if left True.
 TEST_FORCE_DEC31 = False
 
+# DEV ONLY — portfolio rendering flags. Each forces the app into a specific
+# display state regardless of the real calendar feed. Useful for capturing
+# PNG sequences for case studies without needing a live calendar event.
+# NEVER commit any of these as True — they completely bypass the iCal fetch.
+TEST_FORCE_ALERT      = False  # alert state: flashing yellow bar, "Team sync" 3 min out
+TEST_FORCE_ALL_DONE   = False  # "ALL DONE FOR TODAY :)" yellow screen
+TEST_FORCE_QUIET      = False  # quiet phrase screen ("The day is / wide open")
+TEST_FORCE_MAIN_EVENT = False  # main event view with a long scrolling title, 2 h out
+
 def is_new_years_eve(now):
     # New Year's Eve easter egg trigger (Dec 31). TEST_FORCE_DEC31 forces it on
     # for previewing regardless of the real date.
@@ -112,6 +121,36 @@ def main(config):
                 tz = tz_from_loc
 
     now = time.now().in_location(tz)
+
+    # Portfolio test overrides — bypass iCal entirely when any flag is True.
+    # Both timed flags pin "now" and event.start to fixed clock times so the
+    # rendered output looks identical regardless of when the render runs.
+    # The real date (now.year/month/day) is kept so row 1 shows a valid date.
+    if TEST_FORCE_ALERT:
+        # now = 10:27 AM, event = 10:30 AM → 3 min gap triggers alert (window = 5 min).
+        fixed_now = time.time(year = now.year, month = now.month, day = now.day, hour = 10, minute = 27, second = 0, location = tz)
+        fake_start = time.time(year = now.year, month = now.month, day = now.day, hour = 10, minute = 30, second = 0, location = tz)
+        return render_event(
+            {"summary": "Team sync", "start": fake_start, "end": add_seconds(fake_start, 3600), "all_day": False},
+            fixed_now, True, 5,
+        )
+    if TEST_FORCE_DEC31:
+        # Fixed now = Dec 31 of the current year at 9 PM so the date row shows
+        # "DEC 31" and is_new_years_eve() fires (via the flag check inside it).
+        fixed_now = time.time(year = now.year, month = 12, day = 31, hour = 21, minute = 0, second = 0, location = tz)
+        return render_no_events(tz, fixed_now)
+    if TEST_FORCE_ALL_DONE:
+        return render_no_events(tz)
+    if TEST_FORCE_QUIET:
+        return render_empty_day(now, phrase_idx = 2)  # "The day is / wide open"
+    if TEST_FORCE_MAIN_EVENT:
+        # now = 10:30 AM, event = 2:00 PM → 3.5 h gap, well clear of alert window.
+        fixed_now = time.time(year = now.year, month = now.month, day = now.day, hour = 10, minute = 30, second = 0, location = tz)
+        fake_start = time.time(year = now.year, month = now.month, day = now.day, hour = 14, minute = 0, second = 0, location = tz)
+        return render_event(
+            {"summary": "Weekly product review with the team", "start": fake_start, "end": add_seconds(fake_start, 3600), "all_day": False},
+            fixed_now, False, 5,
+        )
 
     ical_url = config.get("ical_url")
     if not ical_url:
@@ -222,6 +261,8 @@ def render_event(event, now, alert_enabled, alert_window_mins):
 
     if event["all_day"]:
         time_str = "All day"
+    elif event["start"] <= now and event["end"] > now:
+        time_str = "Now"
     else:
         time_str = format_time(event["start"])
 
@@ -343,9 +384,9 @@ def render_no_url():
         ),
     )
 
-def render_empty_day(now):
+def render_empty_day(now, phrase_idx = None):
     date_str = format_date(now)
-    idx = days_from_civil(now.year, now.month, now.day) % 6
+    idx = phrase_idx if phrase_idx != None else days_from_civil(now.year, now.month, now.day) % 6
     phrase = QUIET_PHRASES[idx]
     return render.Root(
         child = render.Stack(
@@ -377,10 +418,10 @@ def render_empty_day(now):
         ),
     )
 
-def render_no_events(tz):
+def render_no_events(tz, now_override = None):
     # Same 3-row layout as the main display: icon + today's date on top, then
     # two static yellow lines (no marquee).
-    now = time.now().in_location(tz)
+    now = now_override if now_override != None else time.now().in_location(tz)
     date_str = format_date(now)
 
     # New Year's Eve easter egg: same middle line, year-stamped bottom line
