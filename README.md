@@ -2,6 +2,8 @@
 
 A Tidbyt app that displays your Google Calendar events on a 64×32 LED matrix display — with smart refresh, multi-calendar support, and per-device configuration.
 
+![helloCal on a Tidbyt display](assets/preview.png)
+
 ---
 
 ## What it does
