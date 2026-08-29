@@ -930,14 +930,35 @@ def rrule_matches(freq, interval, bydays, bymonthdays, byday_ordinals, s_ord, sy
         return m == sm and monthday_match(bymonthdays, y, m, d) and (y - sy) % interval == 0
     return False
 
-def rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
-    if count < 0:
-        return True
+def count_occurrences_through(freq, interval, bydays, s_ord, target_ord, max_count):
+    # Count all RRULE occurrences from the series start through target_ord,
+    # ignoring EXDATE. Per RFC 5545, excluded dates still consume a COUNT slot,
+    # so COUNT must be enforced against the raw expansion, not the filtered output.
+    # Returns as soon as the tally exceeds max_count (early exit).
+    # Returns 0 for MONTHLY/YEARLY where positional counting is not implemented
+    # (COUNT remains unenforced for those frequencies, same as before).
+    if target_ord < s_ord:
+        return 0
     if freq == "DAILY":
-        return (d_ord - s_ord) // interval <= count - 1
-    if freq == "WEEKLY" and len(bydays) == 0:
-        return (d_ord - s_ord) // (7 * interval) <= count - 1
-    return True  # weekly+byday / monthly / yearly counts not enforced
+        return (target_ord - s_ord) // interval + 1
+    if freq == "WEEKLY":
+        if len(bydays) == 0:
+            return (target_ord - s_ord) // (7 * interval) + 1
+        # BYDAY: step through each qualifying week-period and count matching
+        # weekdays that fall between s_ord and target_ord.
+        mon_s = s_ord - weekday_mon0(s_ord)    # Monday of the series-start week
+        mon_t = target_ord - weekday_mon0(target_ord)
+        total_periods = (mon_t - mon_s) // (7 * interval)
+        n = 0
+        for p in range(total_periods + 1):
+            for wd in bydays:
+                cur_ord = mon_s + p * 7 * interval + wd
+                if cur_ord >= s_ord and cur_ord <= target_ord:
+                    n += 1
+                    if n > max_count:
+                        return n
+        return n
+    return 0  # MONTHLY/YEARLY: COUNT not enforced
 
 def expand_rrule(start, end, all_day, rrule_str, exdates, recurrence_id_overrides, tz, window):
     rr = parse_rrule(rrule_str)
@@ -988,7 +1009,7 @@ def expand_rrule(start, end, all_day, rrule_str, exdates, recurrence_id_override
         occ_start = time.time(year = y, month = m, day = d, hour = shour, minute = smin, second = ssec, location = tz)
         if until != None and occ_start > until:
             continue
-        if not rrule_within_count(freq, interval, bydays, count, s_ord, d_ord):
+        if count >= 0 and count_occurrences_through(freq, interval, bydays, s_ord, d_ord, count) > count:
             continue
         if (y, m, d) in ex:
             continue
