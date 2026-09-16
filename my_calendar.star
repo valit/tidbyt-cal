@@ -92,6 +92,7 @@ TEST_FORCE_ALERT      = False  # alert state: flashing yellow bar, "Team sync" 3
 TEST_FORCE_ALL_DONE   = False  # "ALL DONE FOR TODAY :)" yellow screen
 TEST_FORCE_QUIET      = False  # quiet phrase screen ("The day is / wide open")
 TEST_FORCE_MAIN_EVENT = False  # main event view with a long scrolling title, 2 h out
+TEST_FORCE_TOMORROW   = False  # after-8pm look-ahead: timed event starting tomorrow at 9am
 
 def is_new_years_eve(now):
     # New Year's Eve easter egg trigger (Dec 31). TEST_FORCE_DEC31 forces it on
@@ -147,6 +148,15 @@ def main(config):
         # now = 10:30 AM, event = 2:00 PM → 3.5 h gap, well clear of alert window.
         fixed_now = time.time(year = now.year, month = now.month, day = now.day, hour = 10, minute = 30, second = 0, location = tz)
         fake_start = time.time(year = now.year, month = now.month, day = now.day, hour = 14, minute = 0, second = 0, location = tz)
+        return render_event(
+            {"summary": "Weekly product review with the team", "start": fake_start, "end": add_seconds(fake_start, 3600), "all_day": False},
+            fixed_now, False, 5,
+        )
+    if TEST_FORCE_TOMORROW:
+        # now = 9:15 PM today, event = tomorrow 9:00 AM → after-8pm look-ahead, date row shows "Tomorrow".
+        fixed_now = time.time(year = now.year, month = now.month, day = now.day, hour = 21, minute = 15, second = 0, location = tz)
+        tomorrow = add_seconds(fixed_now, 24 * 60 * 60)
+        fake_start = time.time(year = tomorrow.year, month = tomorrow.month, day = tomorrow.day, hour = 9, minute = 0, second = 0, location = tz)
         return render_event(
             {"summary": "Weekly product review with the team", "start": fake_start, "end": add_seconds(fake_start, 3600), "all_day": False},
             fixed_now, False, 5,
@@ -256,7 +266,6 @@ def title_row(title, top = 14):
     )
 
 def render_event(event, now, alert_enabled, alert_window_mins):
-    date_str = format_date(event["start"])
     title = event["summary"]  # preserved exactly as in the calendar
 
     if event["all_day"]:
@@ -265,6 +274,13 @@ def render_event(event, now, alert_enabled, alert_window_mins):
         time_str = "Now"
     else:
         time_str = format_time(event["start"])
+
+    # Show "Tomorrow" in the date row for any tomorrow look-ahead (timed or all-day).
+    showing_tomorrow = (
+        time_str == "Tomorrow" or
+        (not event["all_day"] and event["start"] > now and not same_day(event["start"], now))
+    )
+    date_str = "Tomorrow" if showing_tomorrow else format_date(event["start"])
 
     # Alert state: fire when we are within alert_window_mins of an upcoming event.
     alert = (
