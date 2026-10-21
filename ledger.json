@@ -1,1 +1,1 @@
-{"ical_hash":"d87b062fcab9c43d","jobs":[{"job_id":8695152,"moment":"2026-10-21T21:00:00+00:00","devices":["bedroom"]},{"job_id":8695480,"moment":"2026-10-21T20:15:00+00:00","devices":["bedroom"]},{"job_id":8695481,"moment":"2026-10-21T20:25:00+00:00","devices":["bedroom"]}]}
+{"ical_hash":"343d37534671cec4","jobs":[{"job_id":8695152,"moment":"2026-10-21T21:00:00+00:00","devices":["bedroom"]},{"job_id":8695512,"moment":"2026-10-21T20:15:00+00:00","devices":["bedroom","fireplace"]},{"job_id":8695513,"moment":"2026-10-21T21:30:00+00:00","devices":["bedroom","fireplace"]}]}
